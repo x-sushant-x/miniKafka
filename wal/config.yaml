@@ -1,0 +1,2 @@
+store:
+  message_max_size: 1000000 # Bytes
