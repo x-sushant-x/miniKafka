@@ -12,9 +12,9 @@ import (
 func TestWAL_AppendAndRead(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
 	records := []*models.Record{
 		{
@@ -38,13 +38,13 @@ func TestWAL_AppendAndRead(t *testing.T) {
 	var offsets []uint64
 
 	for _, record := range records {
-		off, err := wal.Append(record)
+		off, err := wal.append(record)
 		require.NoError(t, err)
 		offsets = append(offsets, off)
 	}
 
 	for i, off := range offsets {
-		record, err := wal.Read(off)
+		record, err := wal.read(off)
 		require.NoError(t, err)
 		require.Equal(t, records[i].Value, record.Value)
 	}
@@ -53,12 +53,12 @@ func TestWAL_AppendAndRead(t *testing.T) {
 func TestWAL_OffsetsAreSequential(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
 	for i := 0; i < 100; i++ {
-		off, err := wal.Append(&models.Record{
+		off, err := wal.append(&models.Record{
 			Value:     []byte("x"),
 			Timestamp: uint64(time.Now().Unix()),
 		})
@@ -74,12 +74,12 @@ func TestWAL_SegmentRotation(t *testing.T) {
 	maxStoreBytes = 100
 	defer func() { maxStoreBytes = old }()
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
 	for i := 0; i < 50; i++ {
-		_, err := wal.Append(&models.Record{
+		_, err := wal.append(&models.Record{
 			Value:     []byte("this is a test message"),
 			Timestamp: uint64(time.Now().Unix()),
 		})
@@ -96,9 +96,9 @@ func TestWAL_ReadAcrossSegments(t *testing.T) {
 	maxStoreBytes = 100
 	defer func() { maxStoreBytes = old }()
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
 	var offsets []uint64
 
@@ -108,13 +108,13 @@ func TestWAL_ReadAcrossSegments(t *testing.T) {
 			Timestamp: uint64(time.Now().Unix()),
 		}
 
-		off, err := wal.Append(record)
+		off, err := wal.append(record)
 		require.NoError(t, err)
 		offsets = append(offsets, off)
 	}
 
 	for i, off := range offsets {
-		record, err := wal.Read(off)
+		record, err := wal.read(off)
 		require.NoError(t, err)
 		require.Equal(
 			t,
@@ -128,26 +128,26 @@ func TestWAL_RestartRecovery(t *testing.T) {
 	dir := t.TempDir()
 
 	{
-		wal, err := NewWAL(dir)
+		wal, err := newWAL(dir)
 		require.NoError(t, err)
 
 		for i := 0; i < 20; i++ {
-			_, err := wal.Append(&models.Record{
+			_, err := wal.append(&models.Record{
 				Value:     []byte(fmt.Sprintf("msg-%d", i)),
 				Timestamp: uint64(time.Now().Unix()),
 			})
 			require.NoError(t, err)
 		}
 
-		require.NoError(t, wal.Close())
+		require.NoError(t, wal.close())
 	}
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
 	for i := 0; i < 20; i++ {
-		record, err := wal.Read(uint64(i))
+		record, err := wal.read(uint64(i))
 		require.NoError(t, err)
 		require.Equal(
 			t,
@@ -160,20 +160,20 @@ func TestWAL_RestartRecovery(t *testing.T) {
 func TestWAL_ReadOutOfRange(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
-	_, err = wal.Read(100)
+	_, err = wal.read(100)
 	require.Error(t, err)
 }
 
 func TestWAL_EmptyRecovery(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := NewWAL(dir)
+	wal, err := newWAL(dir)
 	require.NoError(t, err)
-	defer wal.Close()
+	defer wal.close()
 
 	require.Len(t, wal.segments, 1)
 	require.Equal(t, uint64(0), wal.active.baseOff)

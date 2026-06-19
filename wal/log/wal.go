@@ -11,15 +11,15 @@ import (
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
-type WAL struct {
+type wal struct {
 	dir      string
 	active   *segment
 	segments []*segment
 	mu       sync.RWMutex
 }
 
-func NewWAL(dir string) (*WAL, error) {
-	w := &WAL{
+func newWAL(dir string) (*wal, error) {
+	w := &wal{
 		dir: dir,
 	}
 
@@ -68,7 +68,7 @@ func NewWAL(dir string) (*WAL, error) {
 	return w, nil
 }
 
-func (w *WAL) Append(record *models.Record) (uint64, error) {
+func (w *wal) append(record *models.Record) (uint64, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -81,7 +81,7 @@ func (w *WAL) Append(record *models.Record) (uint64, error) {
 	return w.active.Append(record)
 }
 
-func (w *WAL) rotate() error {
+func (w *wal) rotate() error {
 	baseOff := w.active.nextOff
 
 	seg, err := newSegment(baseOff, w.dir)
@@ -95,7 +95,7 @@ func (w *WAL) rotate() error {
 	return nil
 }
 
-func (w *WAL) Read(offset uint64) (*models.Record, error) {
+func (w *wal) read(offset uint64) (*models.Record, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 
@@ -107,7 +107,7 @@ func (w *WAL) Read(offset uint64) (*models.Record, error) {
 	return seg.Read(offset)
 }
 
-func (w *WAL) findSegment(offset uint64) *segment {
+func (w *wal) findSegment(offset uint64) *segment {
 	low := 0
 	high := len(w.segments) - 1
 
@@ -127,7 +127,7 @@ func (w *WAL) findSegment(offset uint64) *segment {
 	return nil
 }
 
-func (w *WAL) Close() error {
+func (w *wal) close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
