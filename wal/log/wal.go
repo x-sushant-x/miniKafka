@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
 type WAL struct {
@@ -66,7 +68,7 @@ func NewWAL(dir string) (*WAL, error) {
 	return w, nil
 }
 
-func (w *WAL) Append(msg []byte) (uint64, error) {
+func (w *WAL) Append(record *models.Record) (uint64, error) {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
@@ -76,7 +78,7 @@ func (w *WAL) Append(msg []byte) (uint64, error) {
 		}
 	}
 
-	return w.active.Append(msg)
+	return w.active.Append(record)
 }
 
 func (w *WAL) rotate() error {
@@ -93,7 +95,7 @@ func (w *WAL) rotate() error {
 	return nil
 }
 
-func (w *WAL) Read(offset uint64) ([]byte, error) {
+func (w *WAL) Read(offset uint64) (*models.Record, error) {
 	w.mu.RLock()
 	defer w.mu.RUnlock()
 

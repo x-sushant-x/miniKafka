@@ -1,6 +1,11 @@
 /*
  * This code is responsible for writing data to log files in following format:
- * [length][checksum][data]
+ * [length][checksum][timestamp][data]
+ *
+ * Checksum ensures data integrity. It is made by combining msg + msg length.
+ *
+ * Timestamp will be used to implement the functionality where client request is to give all messages after given timestamp.
+ * Introducing timestamp based access will also require to maintain another file .timeindex
  */
 
 package log
@@ -13,12 +18,15 @@ import (
 	"io"
 	"os"
 	"sync"
+
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
 const (
-	lenWidth       = 4
-	checksumWidth  = 4
+	lenWidth       = 4       // Bytes
+	checksumWidth  = 4       // Bytes
 	messageMaxSize = 1000000 // Bytes
+	timestampWidth = 8       // Bytes
 )
 
 var (
@@ -57,8 +65,10 @@ func newLogStore(file *os.File) (*logStore, error) {
  * 2. Generate and store a checksum from the combination of msgLen + msg.
  * 3. Store data into log file in following format: [length][checksum][data]
  */
-func (store *logStore) Append(msg []byte) (totalBytesWritten int, pos uint64, err error) {
-	if len(msg) > messageMaxSize {
+func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos uint64, err error) {
+	msgLen := uint32(len(record.Value))
+
+	if msgLen > messageMaxSize {
 		return 0, 0, errMessageMaxSizeBreached
 	}
 
@@ -71,9 +81,11 @@ func (store *logStore) Append(msg []byte) (totalBytesWritten int, pos uint64, er
 	 */
 	pos = store.size
 
-	msgLen := uint32(len(msg))
 	lenBuf := make([]byte, lenWidth)
 	enc.PutUint32(lenBuf, msgLen)
+
+	timestampBuf := make([]byte, timestampWidth)
+	enc.PutUint64(timestampBuf, record.Timestamp)
 
 	/*
 	 * We are using CRC32 for checksum because:
@@ -83,20 +95,21 @@ func (store *logStore) Append(msg []byte) (totalBytesWritten int, pos uint64, er
 	 */
 	crc := crc32.NewIEEE()
 	crc.Write(lenBuf)
-	crc.Write(msg)
+	crc.Write(record.Value)
 	checksum := crc.Sum32()
 	checksumBuf := make([]byte, checksumWidth)
 	binary.BigEndian.PutUint32(checksumBuf, checksum)
 
 	// Instead of invoking 3 different Write calls for 3 different data we are combining them and writing at once.
 	// This reduces the cases of errors.
-	recordLen := lenWidth + checksumWidth + len(msg)
-	record := make([]byte, recordLen)
-	copy(record[0:], lenBuf)
-	copy(record[lenWidth:], checksumBuf)
-	copy(record[lenWidth+checksumWidth:], msg)
+	recordLen := lenWidth + checksumWidth + timestampWidth + msgLen
+	r := make([]byte, recordLen)
+	copy(r[0:], lenBuf)
+	copy(r[lenWidth:], checksumBuf)
+	copy(r[lenWidth+checksumWidth:], timestampBuf)
+	copy(r[lenWidth+checksumWidth+timestampWidth:], record.Value)
 
-	bytesWritten, err := writeFull(store.buf, record)
+	bytesWritten, err := writeFull(store.buf, r)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -106,7 +119,7 @@ func (store *logStore) Append(msg []byte) (totalBytesWritten int, pos uint64, er
 		return
 	}
 
-	totalBytesWritten = lenWidth + checksumWidth + len(msg)
+	totalBytesWritten = lenWidth + checksumWidth + timestampWidth + len(record.Value)
 	store.size += uint64(totalBytesWritten)
 
 	return
@@ -121,7 +134,7 @@ func (store *logStore) Append(msg []byte) (totalBytesWritten int, pos uint64, er
  * 5. Generate a checksum with length + message.
  * 6. Compare if generated checksum and stored checksum is equal or not.
  */
-func (store *logStore) Read(posToRead uint64) ([]byte, error) {
+func (store *logStore) Read(posToRead uint64) (*models.Record, error) {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
@@ -130,13 +143,13 @@ func (store *logStore) Read(posToRead uint64) ([]byte, error) {
 	}
 
 	lenBuf := make([]byte, lenWidth)
+	checksumBuf := make([]byte, checksumWidth)
+	timestampBuf := make([]byte, timestampWidth)
 
 	_, err := store.f.ReadAt(lenBuf, int64(posToRead))
 	if err != nil {
 		return nil, err
 	}
-
-	checksumBuf := make([]byte, checksumWidth)
 
 	_, err = store.f.ReadAt(checksumBuf, int64(posToRead)+lenWidth)
 	if err != nil {
@@ -145,10 +158,15 @@ func (store *logStore) Read(posToRead uint64) ([]byte, error) {
 
 	expectedChecksum := enc.Uint32(checksumBuf)
 
+	_, err = store.f.ReadAt(timestampBuf, int64(posToRead)+lenWidth+checksumWidth)
+	if err != nil {
+		return nil, err
+	}
+
 	dataLen := enc.Uint32(lenBuf)
 	data := make([]byte, dataLen)
 
-	_, err = store.f.ReadAt(data, int64(posToRead)+lenWidth+checksumWidth)
+	_, err = store.f.ReadAt(data, int64(posToRead)+lenWidth+checksumWidth+timestampWidth)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +181,10 @@ func (store *logStore) Read(posToRead uint64) ([]byte, error) {
 		return nil, errors.New("corrupted WAL entry: checksum mismatch")
 	}
 
-	return data, err
+	return &models.Record{
+		Value:     data,
+		Timestamp: enc.Uint64(timestampBuf),
+	}, err
 }
 
 func (store *logStore) Close() error {

@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
+
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
 func createTestStore(t *testing.T) (*logStore, func()) {
@@ -45,9 +48,12 @@ func TestAppendAndRead(t *testing.T) {
 	store, cleanup := createTestStore(t)
 	defer cleanup()
 
-	msg := []byte("hello wal")
+	record := &models.Record{
+		Value:     []byte("This is sushant"),
+		Timestamp: uint64(time.Now().Unix()),
+	}
 
-	_, pos, err := store.Append(msg)
+	_, pos, err := store.Append(record)
 	if err != nil {
 		t.Fatalf("append failed: %v", err)
 	}
@@ -57,8 +63,16 @@ func TestAppendAndRead(t *testing.T) {
 		t.Fatalf("read failed: %v", err)
 	}
 
-	if string(got) != string(msg) {
-		t.Fatalf("expected %q got %q", msg, got)
+	if string(got.Value) != string(record.Value) {
+		t.Fatalf("expected %q got %q", record.Value, got.Value)
+	}
+
+	if got.Timestamp != record.Timestamp {
+		t.Fatalf(
+			"expected timestamp %d got %d",
+			record.Timestamp,
+			got.Timestamp,
+		)
 	}
 }
 
@@ -66,16 +80,25 @@ func TestMultipleAppends(t *testing.T) {
 	store, cleanup := createTestStore(t)
 	defer cleanup()
 
-	messages := [][]byte{
-		[]byte("first"),
-		[]byte("second"),
-		[]byte("third"),
+	records := []*models.Record{
+		{
+			Value:     []byte("first"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("second"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("third"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
 	}
 
 	var positions []uint64
 
-	for _, msg := range messages {
-		_, pos, err := store.Append(msg)
+	for _, record := range records {
+		_, pos, err := store.Append(record)
 		if err != nil {
 			t.Fatalf("append failed: %v", err)
 		}
@@ -83,17 +106,17 @@ func TestMultipleAppends(t *testing.T) {
 		positions = append(positions, pos)
 	}
 
-	for i := range messages {
+	for i := range records {
 		got, err := store.Read(positions[i])
 		if err != nil {
 			t.Fatalf("read failed: %v", err)
 		}
 
-		if string(got) != string(messages[i]) {
+		if string(got.Value) != string(records[i].Value) {
 			t.Fatalf(
 				"expected %q got %q",
-				messages[i],
-				got,
+				records[i].Value,
+				got.Value,
 			)
 		}
 	}
@@ -103,9 +126,12 @@ func TestAppend_MessageTooLarge(t *testing.T) {
 	store, cleanup := createTestStore(t)
 	defer cleanup()
 
-	msg := make([]byte, messageMaxSize+1)
+	record := &models.Record{
+		Value:     make([]byte, messageMaxSize+1),
+		Timestamp: uint64(time.Now().Unix()),
+	}
 
-	_, _, err := store.Append(msg)
+	_, _, err := store.Append(record)
 
 	if !errors.Is(err, errMessageMaxSizeBreached) {
 		t.Fatalf(
@@ -120,9 +146,12 @@ func TestChecksumCorruptionDetection(t *testing.T) {
 	store, cleanup := createTestStore(t)
 	defer cleanup()
 
-	msg := []byte("important data")
+	record := &models.Record{
+		Value:     []byte("important data"),
+		Timestamp: uint64(time.Now().Unix()),
+	}
 
-	_, pos, err := store.Append(msg)
+	_, pos, err := store.Append(record)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,11 +161,11 @@ func TestChecksumCorruptionDetection(t *testing.T) {
 	}
 
 	/*
-	 * Corrupt a byte in payload.
+	 * Corrupt a byte in serialized record payload.
 	 */
 	_, err = store.f.WriteAt(
 		[]byte{0xFF},
-		int64(pos)+lenWidth+checksumWidth,
+		int64(pos)+lenWidth+checksumWidth+timestampWidth,
 	)
 	if err != nil {
 		t.Fatal(err)

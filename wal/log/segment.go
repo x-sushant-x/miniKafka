@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path"
+
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
 var maxStoreBytes = 16 * 1024 * 1024 // 16MB
@@ -50,19 +52,19 @@ func newSegment(baseOff uint64, dir string) (*segment, error) {
 	return s, nil
 }
 
-/*
- * Base Offset = 100
- * Next Offset = 101
- * Relative Offset = (101 - 100) = 1
- */
-func (s *segment) Append(msg []byte) (offset uint64, err error) {
+func (s *segment) Append(record *models.Record) (offset uint64, err error) {
 	offset = s.nextOff
 
-	_, pos, err := s.store.Append(msg)
+	_, pos, err := s.store.Append(record)
 	if err != nil {
 		return 0, err
 	}
 
+	/*
+	 * Base Offset = 100
+	 * Next Offset = 101
+	 * Relative Offset = (101 - 100) = 1
+	 */
 	relOff := uint32(offset - s.baseOff)
 
 	if err := s.index.Write(relOff, pos); err != nil {
@@ -74,7 +76,7 @@ func (s *segment) Append(msg []byte) (offset uint64, err error) {
 	return offset, nil
 }
 
-func (s *segment) Read(offset uint64) ([]byte, error) {
+func (s *segment) Read(offset uint64) (*models.Record, error) {
 	if offset < s.baseOff || offset >= s.nextOff {
 		return nil, fmt.Errorf("offset out of range")
 	}

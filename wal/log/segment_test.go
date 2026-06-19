@@ -4,8 +4,10 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
 func TestSegment_NewSegment_Empty(t *testing.T) {
@@ -33,24 +35,33 @@ func TestSegment_AppendAndRead(t *testing.T) {
 	require.NoError(t, err)
 	defer seg.Close()
 
-	msgs := [][]byte{
-		[]byte("a"),
-		[]byte("b"),
-		[]byte("c"),
+	records := []*models.Record{
+		{
+			Value:     []byte("a"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("b"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("c"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
 	}
 
 	var offsets []uint64
 
-	for _, m := range msgs {
-		off, err := seg.Append(m)
+	for _, record := range records {
+		off, err := seg.Append(record)
 		require.NoError(t, err)
 		offsets = append(offsets, off)
 	}
 
 	for i, off := range offsets {
-		data, err := seg.Read(off)
+		record, err := seg.Read(off)
 		require.NoError(t, err)
-		require.Equal(t, msgs[i], data)
+		require.Equal(t, records[i].Value, record.Value)
 	}
 }
 
@@ -62,7 +73,10 @@ func TestSegment_OffsetsSequential(t *testing.T) {
 	defer seg.Close()
 
 	for i := 0; i < 10; i++ {
-		off, err := seg.Append([]byte("x"))
+		off, err := seg.Append(&models.Record{
+			Value:     []byte("x"),
+			Timestamp: uint64(time.Now().Unix()),
+		})
 		require.NoError(t, err)
 		require.Equal(t, uint64(5+i), off)
 	}
@@ -91,7 +105,10 @@ func TestSegment_Recovery(t *testing.T) {
 		require.NoError(t, err)
 
 		for i := 0; i < 5; i++ {
-			_, err := seg.Append([]byte("msg"))
+			_, err := seg.Append(&models.Record{
+				Value:     []byte("msg"),
+				Timestamp: uint64(time.Now().Unix()),
+			})
 			require.NoError(t, err)
 		}
 
@@ -107,9 +124,9 @@ func TestSegment_Recovery(t *testing.T) {
 
 	// verify data still readable
 	for i := 0; i < 5; i++ {
-		data, err := seg.Read(uint64(i))
+		record, err := seg.Read(uint64(i))
 		require.NoError(t, err)
-		require.Equal(t, []byte("msg"), data)
+		require.Equal(t, []byte("msg"), record.Value)
 	}
 }
 
@@ -127,7 +144,10 @@ func TestSegment_IsMaxed(t *testing.T) {
 	require.False(t, seg.IsMaxed())
 
 	for i := 0; i < 10; i++ {
-		_, err := seg.Append([]byte("this is a test message"))
+		_, err := seg.Append(&models.Record{
+			Value:     []byte("this is a test message"),
+			Timestamp: uint64(time.Now().Unix()),
+		})
 		require.NoError(t, err)
 	}
 

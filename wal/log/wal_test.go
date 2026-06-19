@@ -3,8 +3,10 @@ package log
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
 func TestWAL_AppendAndRead(t *testing.T) {
@@ -14,25 +16,37 @@ func TestWAL_AppendAndRead(t *testing.T) {
 	require.NoError(t, err)
 	defer wal.Close()
 
-	msgs := [][]byte{
-		[]byte("hello"),
-		[]byte("world"),
-		[]byte("wal"),
-		[]byte("sushant"),
+	records := []*models.Record{
+		{
+			Value:     []byte("hello"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("world"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("wal"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
+		{
+			Value:     []byte("sushant"),
+			Timestamp: uint64(time.Now().Unix()),
+		},
 	}
 
 	var offsets []uint64
 
-	for _, m := range msgs {
-		off, err := wal.Append(m)
+	for _, record := range records {
+		off, err := wal.Append(record)
 		require.NoError(t, err)
 		offsets = append(offsets, off)
 	}
 
 	for i, off := range offsets {
-		data, err := wal.Read(off)
+		record, err := wal.Read(off)
 		require.NoError(t, err)
-		require.Equal(t, msgs[i], data)
+		require.Equal(t, records[i].Value, record.Value)
 	}
 }
 
@@ -44,7 +58,10 @@ func TestWAL_OffsetsAreSequential(t *testing.T) {
 	defer wal.Close()
 
 	for i := 0; i < 100; i++ {
-		off, err := wal.Append([]byte("x"))
+		off, err := wal.Append(&models.Record{
+			Value:     []byte("x"),
+			Timestamp: uint64(time.Now().Unix()),
+		})
 		require.NoError(t, err)
 		require.Equal(t, uint64(i), off)
 	}
@@ -53,7 +70,6 @@ func TestWAL_OffsetsAreSequential(t *testing.T) {
 func TestWAL_SegmentRotation(t *testing.T) {
 	dir := t.TempDir()
 
-	// shrink segment size for testing
 	old := maxStoreBytes
 	maxStoreBytes = 100
 	defer func() { maxStoreBytes = old }()
@@ -62,9 +78,11 @@ func TestWAL_SegmentRotation(t *testing.T) {
 	require.NoError(t, err)
 	defer wal.Close()
 
-	// write enough to force multiple segments
 	for i := 0; i < 50; i++ {
-		_, err := wal.Append([]byte("this is a test message"))
+		_, err := wal.Append(&models.Record{
+			Value:     []byte("this is a test message"),
+			Timestamp: uint64(time.Now().Unix()),
+		})
 		require.NoError(t, err)
 	}
 
@@ -85,44 +103,57 @@ func TestWAL_ReadAcrossSegments(t *testing.T) {
 	var offsets []uint64
 
 	for i := 0; i < 50; i++ {
-		msg := []byte(fmt.Sprintf("msg-%d", i))
-		off, err := wal.Append(msg)
+		record := &models.Record{
+			Value:     []byte(fmt.Sprintf("msg-%d", i)),
+			Timestamp: uint64(time.Now().Unix()),
+		}
+
+		off, err := wal.Append(record)
 		require.NoError(t, err)
 		offsets = append(offsets, off)
 	}
 
 	for i, off := range offsets {
-		data, err := wal.Read(off)
+		record, err := wal.Read(off)
 		require.NoError(t, err)
-		require.Equal(t, []byte(fmt.Sprintf("msg-%d", i)), data)
+		require.Equal(
+			t,
+			[]byte(fmt.Sprintf("msg-%d", i)),
+			record.Value,
+		)
 	}
 }
 
 func TestWAL_RestartRecovery(t *testing.T) {
 	dir := t.TempDir()
 
-	// create + write
 	{
 		wal, err := NewWAL(dir)
 		require.NoError(t, err)
 
 		for i := 0; i < 20; i++ {
-			_, err := wal.Append([]byte(fmt.Sprintf("msg-%d", i)))
+			_, err := wal.Append(&models.Record{
+				Value:     []byte(fmt.Sprintf("msg-%d", i)),
+				Timestamp: uint64(time.Now().Unix()),
+			})
 			require.NoError(t, err)
 		}
 
 		require.NoError(t, wal.Close())
 	}
 
-	// reopen
 	wal, err := NewWAL(dir)
 	require.NoError(t, err)
 	defer wal.Close()
 
 	for i := 0; i < 20; i++ {
-		data, err := wal.Read(uint64(i))
+		record, err := wal.Read(uint64(i))
 		require.NoError(t, err)
-		require.Equal(t, []byte(fmt.Sprintf("msg-%d", i)), data)
+		require.Equal(
+			t,
+			[]byte(fmt.Sprintf("msg-%d", i)),
+			record.Value,
+		)
 	}
 }
 
