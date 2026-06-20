@@ -1,13 +1,21 @@
 package log
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
+const STORAGE_DIR = "/Users/sushantdhiman/GoLang/miniKafka/.logs"
+
+func setStorageDir() {
+	os.Setenv("STORAGE_DIR", STORAGE_DIR)
+}
+
 func TestNewTopic(t *testing.T) {
+	setStorageDir()
 	topic, err := NewTopic("orders")
 
 	require.NoError(t, err)
@@ -16,6 +24,7 @@ func TestNewTopic(t *testing.T) {
 }
 
 func TestNewTopic_EmptyName(t *testing.T) {
+	setStorageDir()
 	topic, err := NewTopic("")
 
 	require.ErrorIs(t, err, ErrEmptyTopicName)
@@ -23,6 +32,7 @@ func TestNewTopic_EmptyName(t *testing.T) {
 }
 
 func TestTopic_AppendAndRead(t *testing.T) {
+	setStorageDir()
 	topic, err := NewTopic("append-read")
 	require.NoError(t, err)
 
@@ -41,6 +51,7 @@ func TestTopic_AppendAndRead(t *testing.T) {
 }
 
 func TestTopic_MultipleRecords(t *testing.T) {
+	setStorageDir()
 	topic, err := NewTopic("multiple-records")
 	require.NoError(t, err)
 
@@ -66,6 +77,7 @@ func TestTopic_MultipleRecords(t *testing.T) {
 }
 
 func TestTopic_AssignsOffsets(t *testing.T) {
+	setStorageDir()
 	topic, err := NewTopic("offset-test")
 	require.NoError(t, err)
 
@@ -90,6 +102,7 @@ func TestTopic_AssignsOffsets(t *testing.T) {
 }
 
 func TestTopic_ReadInvalidOffset(t *testing.T) {
+	setStorageDir()
 	topic, err := NewTopic("invalid-offset")
 	require.NoError(t, err)
 

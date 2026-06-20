@@ -17,12 +17,12 @@ func NewTopic(name string) (*Topic, error) {
 		return nil, ErrEmptyTopicName
 	}
 
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
+	storageDir := os.Getenv("STORAGE_DIR")
+	if storageDir == "" {
+		return nil, ErrStorageDirVariableNoProvided
 	}
 
-	topicFolder := filepath.Join(wd, name)
+	topicFolder := filepath.Join(storageDir, name)
 
 	wal, err := newWAL(topicFolder)
 	if err != nil {
