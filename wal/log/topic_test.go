@@ -11,7 +11,7 @@ import (
 const STORAGE_DIR = "/Users/sushantdhiman/GoLang/miniKafka/.logs"
 
 func setStorageDir() {
-	os.Setenv("STORAGE_DIR", STORAGE_DIR)
+	os.Setenv("TOPICS_STORAGE_DIR", STORAGE_DIR)
 }
 
 func TestNewTopic(t *testing.T) {

@@ -17,7 +17,7 @@ func NewTopic(name string) (*Topic, error) {
 		return nil, ErrEmptyTopicName
 	}
 
-	storageDir := os.Getenv("STORAGE_DIR")
+	storageDir := os.Getenv("TOPICS_STORAGE_DIR")
 	if storageDir == "" {
 		return nil, ErrStorageDirVariableNoProvided
 	}

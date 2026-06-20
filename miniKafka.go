@@ -1,6 +1,11 @@
 package main
 
-import "github.com/joho/godotenv"
+import (
+	"os"
+
+	"github.com/joho/godotenv"
+	"github.com/x-sushant-x/miniKafka/broker"
+)
 
 func init() {
 	err := godotenv.Load(".env")
@@ -9,4 +14,19 @@ func init() {
 	}
 }
 
-func main() {}
+func main() {
+	brokerPort := os.Getenv("BROKER_PORT")
+	if brokerPort == "" {
+		panic("BROKER_PORT not specified in .env")
+	}
+
+	b, err := broker.New(brokerPort)
+	if err != nil {
+		panic("unable to initialize broker")
+	}
+
+	err = b.Start()
+	if err != nil {
+		panic("unable to start broker")
+	}
+}
