@@ -5,8 +5,10 @@ package broker
 import (
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 
 	"github.com/x-sushant-x/miniKafka/models"
@@ -19,16 +21,39 @@ type Broker struct {
 }
 
 func New(port string) (*Broker, error) {
-	topicsStorageDir := os.Getenv("TOPICS_STORAGE_DIR")
-	if topicsStorageDir == "" {
+	topicsStoragePath := os.Getenv("TOPICS_STORAGE_DIR")
+	if topicsStoragePath == "" {
 		return nil, ErrEmptyTopicsStorageDir
 	}
 
-	// TODO - Add mechanism to reload topics from storage on restart
-	return &Broker{
+	broker := Broker{
 		port:   port,
 		topics: make(map[string]*log.Topic),
-	}, nil
+	}
+
+	filepath.WalkDir(topicsStoragePath, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if !d.IsDir() || path == topicsStoragePath {
+			return nil
+		}
+
+		topicName := filepath.Base(path)
+
+		existingTopic, err := log.NewTopic(topicName)
+		if err != nil {
+			return err
+		}
+
+		broker.topics[topicName] = existingTopic
+		fmt.Println("Loaded existing topic:", topicName)
+
+		return nil
+	})
+
+	return &broker, nil
 }
 
 func (b *Broker) Start() error {
