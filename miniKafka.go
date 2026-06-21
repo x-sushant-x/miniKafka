@@ -25,7 +25,13 @@ func main() {
 		panic("unable to initialize broker")
 	}
 
-	err = b.Start()
+	go startBroker(b)
+
+	select {}
+}
+
+func startBroker(b *broker.Broker) {
+	err := b.Start()
 	if err != nil {
 		panic("unable to start broker")
 	}
