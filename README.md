@@ -8,23 +8,23 @@ A Kafka-inspired message broker written in Go that implements the core building 
 
 ### Features
 
-✅ Persistent message storage
+- [x] Persistent message storage
 
-✅ Append-only log architecture
+- [x] Append-only log architecture
 
-✅ Write-Ahead Logging (WAL)
+- [x] Write-Ahead Logging (WAL)
 
-✅ Topics
+- [x] Topics
 
-✅ Offset-based reads
+- [x] Offset-based reads
 
-✅ Fast index lookups
+- [x] Fast index lookups
 
-✅ Segment rotation
+- [x] Segment rotation
 
-✅ Persistent storage
+- [x] Persistent storage
 
-✅ Broker recovery after restart
+- [x] Broker recovery after restart
 
 - [ ] TCP-based broker protocol
 
