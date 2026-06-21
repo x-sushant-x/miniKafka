@@ -78,7 +78,7 @@ func (c *Client) Commit(topic string) error {
 		return fmt.Errorf("topic %s not being consumed", topic)
 	}
 
-	offsetFileName := fmt.Sprintf(".offset_%s", topic)
+	offsetFileName := fmt.Sprintf(".offset/%s", topic)
 
 	return os.WriteFile(
 		offsetFileName,
@@ -88,7 +88,7 @@ func (c *Client) Commit(topic string) error {
 }
 
 func (c *Client) loadOffset(topic string) (int64, error) {
-	offsetFileName := fmt.Sprintf(".offset_%s", topic)
+	offsetFileName := fmt.Sprintf(".offset/%s", topic)
 
 	bytes, err := os.ReadFile(offsetFileName)
 	if os.IsNotExist(err) {

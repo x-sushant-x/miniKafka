@@ -51,6 +51,7 @@ func TestAppendAndRead(t *testing.T) {
 	record := &models.Record{
 		Value:     []byte("This is sushant"),
 		Timestamp: uint64(time.Now().Unix()),
+		Offset:    0,
 	}
 
 	_, pos, err := store.Append(record)
@@ -84,14 +85,17 @@ func TestMultipleAppends(t *testing.T) {
 		{
 			Value:     []byte("first"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    0,
 		},
 		{
 			Value:     []byte("second"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    1,
 		},
 		{
 			Value:     []byte("third"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    2,
 		},
 	}
 
@@ -129,6 +133,7 @@ func TestAppend_MessageTooLarge(t *testing.T) {
 	record := &models.Record{
 		Value:     make([]byte, messageMaxSize+1),
 		Timestamp: uint64(time.Now().Unix()),
+		Offset:    0,
 	}
 
 	_, _, err := store.Append(record)
@@ -149,6 +154,7 @@ func TestChecksumCorruptionDetection(t *testing.T) {
 	record := &models.Record{
 		Value:     []byte("important data"),
 		Timestamp: uint64(time.Now().Unix()),
+		Offset:    0,
 	}
 
 	_, pos, err := store.Append(record)
@@ -165,7 +171,7 @@ func TestChecksumCorruptionDetection(t *testing.T) {
 	 */
 	_, err = store.f.WriteAt(
 		[]byte{0xFF},
-		int64(pos)+lenWidth+checksumWidth+timestampWidth,
+		int64(pos)+lenWidth+checksumWidth+timestampWidth+offsetWidth,
 	)
 	if err != nil {
 		t.Fatal(err)

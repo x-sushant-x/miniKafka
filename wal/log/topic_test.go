@@ -37,7 +37,8 @@ func TestTopic_AppendAndRead(t *testing.T) {
 	require.NoError(t, err)
 
 	record := &models.Record{
-		Value: []byte("hello world"),
+		Value:  []byte("hello world"),
+		Offset: 0,
 	}
 
 	appended, err := topic.Append(record)
@@ -56,9 +57,9 @@ func TestTopic_MultipleRecords(t *testing.T) {
 	require.NoError(t, err)
 
 	expected := []*models.Record{
-		{Value: []byte("record-1")},
-		{Value: []byte("record-2")},
-		{Value: []byte("record-3")},
+		{Value: []byte("record-1"), Offset: 0},
+		{Value: []byte("record-2"), Offset: 1},
+		{Value: []byte("record-3"), Offset: 2},
 	}
 
 	for _, r := range expected {
@@ -82,17 +83,20 @@ func TestTopic_AssignsOffsets(t *testing.T) {
 	require.NoError(t, err)
 
 	r1, err := topic.Append(&models.Record{
-		Value: []byte("first"),
+		Value:  []byte("first"),
+		Offset: 0,
 	})
 	require.NoError(t, err)
 
 	r2, err := topic.Append(&models.Record{
-		Value: []byte("second"),
+		Value:  []byte("second"),
+		Offset: 1,
 	})
 	require.NoError(t, err)
 
 	r3, err := topic.Append(&models.Record{
-		Value: []byte("third"),
+		Value:  []byte("third"),
+		Offset: 2,
 	})
 	require.NoError(t, err)
 

@@ -39,14 +39,17 @@ func TestSegment_AppendAndRead(t *testing.T) {
 		{
 			Value:     []byte("a"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    0,
 		},
 		{
 			Value:     []byte("b"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    1,
 		},
 		{
 			Value:     []byte("c"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    2,
 		},
 	}
 
@@ -72,10 +75,11 @@ func TestSegment_OffsetsSequential(t *testing.T) {
 	require.NoError(t, err)
 	defer seg.Close()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		off, err := seg.Append(&models.Record{
 			Value:     []byte("x"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    uint64(i),
 		})
 		require.NoError(t, err)
 		require.Equal(t, uint64(5+i), off)
@@ -104,10 +108,11 @@ func TestSegment_Recovery(t *testing.T) {
 		seg, err := newSegment(0, dir)
 		require.NoError(t, err)
 
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			_, err := seg.Append(&models.Record{
 				Value:     []byte("msg"),
 				Timestamp: uint64(time.Now().Unix()),
+				Offset:    uint64(i),
 			})
 			require.NoError(t, err)
 		}
@@ -123,7 +128,7 @@ func TestSegment_Recovery(t *testing.T) {
 	require.Equal(t, uint64(5), seg.nextOff)
 
 	// verify data still readable
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		record, err := seg.Read(uint64(i))
 		require.NoError(t, err)
 		require.Equal(t, []byte("msg"), record.Value)
@@ -143,10 +148,11 @@ func TestSegment_IsMaxed(t *testing.T) {
 
 	require.False(t, seg.IsMaxed())
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_, err := seg.Append(&models.Record{
 			Value:     []byte("this is a test message"),
 			Timestamp: uint64(time.Now().Unix()),
+			Offset:    uint64(i),
 		})
 		require.NoError(t, err)
 	}

@@ -1,6 +1,6 @@
 /*
  * This code is responsible for writing data to log files in following format:
- * [length][checksum][timestamp][data]
+ * [length][checksum][timestamp][offset][data]
  *
  * Checksum ensures data integrity. It is made by combining msg + msg length.
  *
@@ -27,6 +27,7 @@ const (
 	checksumWidth  = 4       // Bytes
 	messageMaxSize = 1000000 // Bytes
 	timestampWidth = 8       // Bytes
+	offsetWidth    = 8       // Bytes
 )
 
 var (
@@ -87,6 +88,9 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 	timestampBuf := make([]byte, timestampWidth)
 	enc.PutUint64(timestampBuf, record.Timestamp)
 
+	offsetBuf := make([]byte, offsetWidth)
+	enc.PutUint64(offsetBuf, record.Offset)
+
 	/*
 	 * We are using CRC32 for checksum because:
 	 * 1. It is exactly designed for detecting corruption in streaming and storage systems.
@@ -102,12 +106,13 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 
 	// Instead of invoking 3 different Write calls for 3 different data we are combining them and writing at once.
 	// This reduces the cases of errors.
-	recordLen := lenWidth + checksumWidth + timestampWidth + msgLen
+	recordLen := lenWidth + checksumWidth + timestampWidth + offsetWidth + msgLen
 	r := make([]byte, recordLen)
 	copy(r[0:], lenBuf)
 	copy(r[lenWidth:], checksumBuf)
 	copy(r[lenWidth+checksumWidth:], timestampBuf)
-	copy(r[lenWidth+checksumWidth+timestampWidth:], record.Value)
+	copy(r[lenWidth+checksumWidth+timestampWidth:], offsetBuf)
+	copy(r[lenWidth+checksumWidth+timestampWidth+offsetWidth:], record.Value)
 
 	bytesWritten, err := writeFull(store.buf, r)
 	if err != nil {
@@ -119,7 +124,7 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 		return
 	}
 
-	totalBytesWritten = lenWidth + checksumWidth + timestampWidth + len(record.Value)
+	totalBytesWritten = lenWidth + checksumWidth + timestampWidth + offsetWidth + len(record.Value)
 	store.size += uint64(totalBytesWritten)
 
 	return
@@ -145,20 +150,28 @@ func (store *logStore) Read(posToRead uint64) (*models.Record, error) {
 	lenBuf := make([]byte, lenWidth)
 	checksumBuf := make([]byte, checksumWidth)
 	timestampBuf := make([]byte, timestampWidth)
+	offsetBuf := make([]byte, offsetWidth)
 
-	_, err := store.f.ReadAt(lenBuf, int64(posToRead))
+	startPos := int64(posToRead)
+
+	_, err := store.f.ReadAt(lenBuf, startPos)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = store.f.ReadAt(checksumBuf, int64(posToRead)+lenWidth)
+	_, err = store.f.ReadAt(checksumBuf, startPos+lenWidth)
 	if err != nil {
 		return nil, err
 	}
 
 	expectedChecksum := enc.Uint32(checksumBuf)
 
-	_, err = store.f.ReadAt(timestampBuf, int64(posToRead)+lenWidth+checksumWidth)
+	_, err = store.f.ReadAt(timestampBuf, startPos+lenWidth+checksumWidth)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = store.f.ReadAt(offsetBuf, startPos+lenWidth+checksumWidth+timestampWidth)
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +179,7 @@ func (store *logStore) Read(posToRead uint64) (*models.Record, error) {
 	dataLen := enc.Uint32(lenBuf)
 	data := make([]byte, dataLen)
 
-	_, err = store.f.ReadAt(data, int64(posToRead)+lenWidth+checksumWidth+timestampWidth)
+	_, err = store.f.ReadAt(data, startPos+lenWidth+checksumWidth+timestampWidth+offsetWidth)
 	if err != nil {
 		return nil, err
 	}
@@ -184,6 +197,7 @@ func (store *logStore) Read(posToRead uint64) (*models.Record, error) {
 	return &models.Record{
 		Value:     data,
 		Timestamp: enc.Uint64(timestampBuf),
+		Offset:    enc.Uint64(offsetBuf),
 	}, err
 }
 
