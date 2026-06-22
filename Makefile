@@ -3,3 +3,6 @@ build:
 
 run: build
 	@ ./bin/miniKafka
+
+test:
+	@ rm -rf .logs && go test ./...
