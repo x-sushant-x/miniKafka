@@ -10,11 +10,13 @@ const (
 	tcpMsgLenWidth = 4 // Bytes
 )
 
+type RequestHandler func([]byte) ([]byte, error)
+
 type TCPServer struct {
 	Port string
 }
 
-func (t TCPServer) StartServer(outputChan chan<- string) error {
+func (t TCPServer) StartServer(handler RequestHandler) error {
 	ln, err := net.Listen("tcp", ":"+t.Port)
 	if err != nil {
 		return err
@@ -26,11 +28,11 @@ func (t TCPServer) StartServer(outputChan chan<- string) error {
 			continue
 		}
 
-		go t.handleConnection(conn, outputChan)
+		go t.handleConnection(conn, handler)
 	}
 }
 
-func (t TCPServer) handleConnection(conn net.Conn, outputChan chan<- string) {
+func (t TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
 	defer conn.Close()
 
 	lenBuf := make([]byte, tcpMsgLenWidth)
@@ -40,14 +42,23 @@ func (t TCPServer) handleConnection(conn net.Conn, outputChan chan<- string) {
 		return
 	}
 
-	length := binary.BigEndian.Uint32(lenBuf)
+	msgLen := binary.BigEndian.Uint32(lenBuf)
 
-	data := make([]byte, length)
+	data := make([]byte, msgLen)
 
 	_, err = io.ReadFull(conn, data)
 	if err != nil {
 		return
 	}
 
-	outputChan <- string(data)
+	resp, err := handler(data)
+	if err != nil {
+		return
+	}
+
+	respLen := make([]byte, 4)
+	binary.BigEndian.PutUint32(respLen, uint32(len(resp)))
+
+	conn.Write(respLen)
+	conn.Write(resp)
 }

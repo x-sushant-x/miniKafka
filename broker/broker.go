@@ -1,21 +1,18 @@
-// TODO - Later replace broker communication with TCP
-
 package broker
 
 import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"os"
 	"path/filepath"
-	"strconv"
 
 	"github.com/x-sushant-x/miniKafka/models"
 	"github.com/x-sushant-x/miniKafka/wal/log"
 )
 
 type Broker struct {
+	// TODO - Prevent Race Conditions
 	topics map[string]*log.Topic
 	port   string
 }
@@ -57,18 +54,11 @@ func New(port string) (*Broker, error) {
 }
 
 func (b *Broker) Start() error {
-	mux := http.NewServeMux()
-
-	mux.HandleFunc("POST /topics/{topic}/messages", b.produceHandler)
-	mux.HandleFunc("GET /topics/{topic}/messages", b.consumeHandler)
-
-	server := &http.Server{
-		Addr:    ":" + b.port,
-		Handler: mux,
+	server := TCPServer{
+		Port: b.port,
 	}
 
-	fmt.Println("Broker running on port:", b.port)
-	return server.ListenAndServe()
+	return server.StartServer(b.handleRequest)
 }
 
 func (b *Broker) Produce(topicName string, record *models.Record) (*models.Record, error) {
@@ -86,6 +76,58 @@ func (b *Broker) Produce(topicName string, record *models.Record) (*models.Recor
 	return topic.Append(record)
 }
 
+func (b *Broker) handleRequest(data []byte) ([]byte, error) {
+	var req models.Request
+
+	if err := json.Unmarshal(data, &req); err != nil {
+		return json.Marshal(models.Response{
+			Success: false,
+			Error:   err.Error(),
+		})
+	}
+
+	switch req.Type {
+
+	case "produce":
+		record := models.Record{
+			Value: []byte(req.Data),
+		}
+
+		stored, err := b.Produce(req.Topic, &record)
+		if err != nil {
+			return json.Marshal(models.Response{
+				Success: false,
+				Error:   err.Error(),
+			})
+		}
+
+		return json.Marshal(models.Response{
+			Success: true,
+			Offset:  stored.Offset,
+		})
+
+	case "consume":
+		record, err := b.Consume(req.Topic, req.Offset)
+		if err != nil {
+			return json.Marshal(models.Response{
+				Success: false,
+				Error:   err.Error(),
+			})
+		}
+
+		return json.Marshal(models.Response{
+			Success: true,
+			Data:    string(record.Value),
+		})
+
+	default:
+		return json.Marshal(models.Response{
+			Success: false,
+			Error:   "unknown request type",
+		})
+	}
+}
+
 func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error) {
 	topic, ok := b.topics[topicName]
 	if !ok || topic == nil {
@@ -93,52 +135,4 @@ func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error
 	}
 
 	return topic.Read(offset)
-}
-
-func (b *Broker) produceHandler(w http.ResponseWriter, r *http.Request) {
-	topicName := r.PathValue("topic")
-
-	var req models.ProduceRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	record := models.Record{
-		Value: []byte(req.Data),
-	}
-
-	_, err := b.Produce(topicName, &record)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode("Stored")
-}
-
-func (b *Broker) consumeHandler(w http.ResponseWriter, r *http.Request) {
-	topicName := r.PathValue("topic")
-
-	offsetStr := r.URL.Query().Get("offset")
-	if offsetStr == "" {
-		http.Error(w, "offset is required", http.StatusBadRequest)
-		return
-	}
-
-	offset, err := strconv.ParseUint(offsetStr, 10, 64)
-	if err != nil {
-		http.Error(w, "invalid offset", http.StatusBadRequest)
-		return
-	}
-
-	record, err := b.Consume(topicName, offset)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(string(record.Value))
 }
