@@ -2,7 +2,6 @@ package broker
 
 import (
 	"encoding/binary"
-	"fmt"
 	"io"
 	"net"
 )
@@ -24,30 +23,31 @@ func (t TCPServer) StartServer(outputChan chan<- string) error {
 	for {
 		conn, err := ln.Accept()
 		if err != nil {
-			fmt.Println("unable to accept connection:", err.Error())
 			continue
 		}
 
-		lenBuf := make([]byte, tcpMsgLenWidth)
-
-		_, err = io.ReadFull(conn, lenBuf)
-		if err != nil {
-			fmt.Println("unable to msg len:", err.Error())
-			conn.Close()
-			continue
-		}
-
-		length := binary.BigEndian.Uint32(lenBuf)
-
-		data := make([]byte, length)
-
-		_, err = io.ReadFull(conn, data)
-		if err != nil {
-			fmt.Println("unable to data:", err.Error())
-			conn.Close()
-			continue
-		}
-
-		outputChan <- string(data)
+		go t.handleConnection(conn, outputChan)
 	}
+}
+
+func (t TCPServer) handleConnection(conn net.Conn, outputChan chan<- string) {
+	defer conn.Close()
+
+	lenBuf := make([]byte, tcpMsgLenWidth)
+
+	_, err := io.ReadFull(conn, lenBuf)
+	if err != nil {
+		return
+	}
+
+	length := binary.BigEndian.Uint32(lenBuf)
+
+	data := make([]byte, length)
+
+	_, err = io.ReadFull(conn, data)
+	if err != nil {
+		return
+	}
+
+	outputChan <- string(data)
 }
