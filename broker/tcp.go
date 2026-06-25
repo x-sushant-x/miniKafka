@@ -33,8 +33,6 @@ func (t TCPServer) StartServer(handler RequestHandler) error {
 }
 
 func (t TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
-	defer conn.Close()
-
 	lenBuf := make([]byte, tcpMsgLenWidth)
 
 	_, err := io.ReadFull(conn, lenBuf)

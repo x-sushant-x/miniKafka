@@ -1,205 +1,117 @@
-/*
- * TODO - Replace HTTP with TCP.
- * TODO - Optimize this client.
- * TODO - Add batching to client and prevent broker from massive traffic from client.
- * TODO - Remove the limitation of single consumer -> single topic and introduce concurrency support via paritions.
- * TODO - Handle Proper errors.
- * Needs a lot of other improvements.
- */
 package client
 
 import (
-	"bytes"
+	"encoding/binary"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"net/http"
-	"os"
-	"strconv"
-	"time"
+	"io"
+	"net"
+
+	"github.com/x-sushant-x/miniKafka/models"
 )
 
-type ProduceRequest struct {
-	Data string `json:"data"`
+type Client interface {
+	Produce(topic string, data []byte) error
+	Consume(topic string, offset uint64) (string, error)
 }
 
-type Client struct {
-	Host                string
-	Port                string
-	AutoCommitFrequency int          // Seconds
-	HTTPClient          *http.Client // For connecting to broker
-	ActiveConsumers     map[string]bool
-	TopicOffset         map[string]int64
+type TCPClient struct {
+	host string
+	port string
+	conn net.Conn
 }
 
-func NewClient(host, port string, autoCommitFrequency int) Client {
-	return Client{
-		Host:                host,
-		Port:                port,
-		AutoCommitFrequency: autoCommitFrequency,
-		HTTPClient:          &http.Client{},
-		ActiveConsumers:     make(map[string]bool),
-		TopicOffset:         make(map[string]int64),
-	}
-}
-
-func (c *Client) Produce(topic, message string) error {
-	endpoint := fmt.Sprintf("%s:%s/topics/%s/messages", c.Host, c.Port, topic)
-
-	reqBody := ProduceRequest{
-		Data: message,
+func NewTCPClient(host, port string) (*TCPClient, error) {
+	address := host + ":" + port
+	conn, err := net.Dial("tcp", address)
+	if err != nil {
+		return nil, err
 	}
 
-	jsonBody, err := json.Marshal(reqBody)
+	tcpClient := TCPClient{
+		host: host,
+		port: port,
+		conn: conn,
+	}
+
+	return &tcpClient, nil
+}
+
+func (c *TCPClient) Produce(topic string, data []byte) error {
+	req := models.Request{
+		Type:  "produce",
+		Topic: topic,
+		Data:  string(data),
+	}
+
+	resp, err := c.send(req)
 	if err != nil {
 		return err
 	}
 
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(jsonBody))
-	if err != nil {
+	if resp.Success == false {
 		return err
-	}
-
-	resp, err := c.HTTPClient.Do(req)
-	if err != nil {
-		return err
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return errors.New("non 200 status code")
 	}
 
 	return nil
 }
 
-func (c *Client) Commit(topic string) error {
-	offset, ok := c.TopicOffset[topic]
-	if !ok {
-		return fmt.Errorf("topic %s not being consumed", topic)
+func (c *TCPClient) Consume(topic string, offset uint64) (string, error) {
+	req := models.Request{
+		Type:   "consume",
+		Topic:  topic,
+		Offset: offset,
 	}
 
-	offsetFileName := fmt.Sprintf(".offset/%s", topic)
-
-	return os.WriteFile(
-		offsetFileName,
-		[]byte(strconv.FormatInt(offset, 10)),
-		0644,
-	)
-}
-
-func (c *Client) loadOffset(topic string) (int64, error) {
-	offsetFileName := fmt.Sprintf(".offset/%s", topic)
-
-	bytes, err := os.ReadFile(offsetFileName)
-	if os.IsNotExist(err) {
-		return 0, nil
-	}
-
-	if err != nil {
-		return 0, err
-	}
-
-	if len(bytes) == 0 {
-		return 0, nil
-	}
-
-	return strconv.ParseInt(string(bytes), 10, 64)
-}
-
-func (c *Client) Consume(topic string, receiverChan chan<- string) error {
-	if c.ActiveConsumers[topic] {
-		return errors.New(
-			"another consumer is already consuming this topic",
-		)
-	}
-
-	offset, err := c.loadOffset(topic)
-	if err != nil {
-		return err
-	}
-
-	c.TopicOffset[topic] = offset
-	c.ActiveConsumers[topic] = true
-
-	go c.consumeLoop(topic, receiverChan)
-
-	return nil
-}
-
-func (c *Client) consumeLoop(topic string, receiverChan chan<- string) {
-	defer func() {
-		c.ActiveConsumers[topic] = false
-		close(receiverChan)
-	}()
-
-	commitTicker := time.NewTicker(
-		time.Duration(c.AutoCommitFrequency) * time.Second,
-	)
-	defer commitTicker.Stop()
-
-	for {
-		select {
-		case <-commitTicker.C:
-			_ = c.Commit(topic)
-
-		default:
-			message, err := c.fetch(
-				topic,
-				c.TopicOffset[topic],
-			)
-
-			if err != nil {
-				time.Sleep(time.Second)
-				continue
-			}
-
-			receiverChan <- message
-
-			c.TopicOffset[topic] = c.TopicOffset[topic] + 1
-
-			if len(message) == 0 {
-				time.Sleep(time.Second)
-			}
-		}
-	}
-}
-
-func (c *Client) fetch(topic string, offset int64) (string, error) {
-	endpoint := fmt.Sprintf(
-		"%s:%s/topics/%s/messages?offset=%d",
-		c.Host,
-		c.Port,
-		topic,
-		offset,
-	)
-
-	req, err := http.NewRequest(
-		http.MethodGet,
-		endpoint,
-		nil,
-	)
+	resp, err := c.send(req)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := c.HTTPClient.Do(req)
+	if resp.Success == false {
+		return "", err
+	}
+
+	return resp.Data, nil
+}
+
+func (c *TCPClient) send(req models.Request) (*models.Response, error) {
+	data, err := json.Marshal(req)
 	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf(
-			"broker returned status %d",
-			resp.StatusCode,
-		)
+		return nil, err
 	}
 
-	var message string
+	lenBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
 
-	if err := json.NewDecoder(resp.Body).Decode(&message); err != nil {
-		return "", err
+	_, err = c.conn.Write(lenBuf)
+	if err != nil {
+		return nil, err
 	}
 
-	return message, nil
+	_, err = c.conn.Write(data)
+	if err != nil {
+		return nil, err
+	}
+
+	respLenBuf := make([]byte, 4)
+	_, err = io.ReadFull(c.conn, respLenBuf)
+	if err != nil {
+		return nil, err
+	}
+
+	respLen := binary.BigEndian.Uint32(respLenBuf)
+
+	respData := make([]byte, respLen)
+	_, err = io.ReadFull(c.conn, respData)
+	if err != nil {
+		return nil, err
+	}
+
+	var resp models.Response
+
+	if err := json.Unmarshal(respData, &resp); err != nil {
+		return nil, err
+	}
+
+	return &resp, nil
 }

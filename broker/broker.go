@@ -2,13 +2,14 @@ package broker
 
 import (
 	"encoding/json"
-	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
 
 	"github.com/x-sushant-x/miniKafka/models"
 	"github.com/x-sushant-x/miniKafka/wal/log"
+
+	logger "log"
 )
 
 type Broker struct {
@@ -28,6 +29,8 @@ func New(port string) (*Broker, error) {
 		topics: make(map[string]*log.Topic),
 	}
 
+	logger.Println("Loading existing topics")
+
 	filepath.WalkDir(topicsStoragePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -45,7 +48,6 @@ func New(port string) (*Broker, error) {
 		}
 
 		broker.topics[topicName] = existingTopic
-		fmt.Println("Loaded existing topic:", topicName)
 
 		return nil
 	})
@@ -54,6 +56,8 @@ func New(port string) (*Broker, error) {
 }
 
 func (b *Broker) Start() error {
+	logger.Println("Starting TCP Server on port:", b.port)
+
 	server := TCPServer{
 		Port: b.port,
 	}
