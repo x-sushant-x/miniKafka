@@ -26,9 +26,7 @@ A Kafka-inspired message broker written in Go that implements the core building 
 
 - [x] Broker recovery after restart
 
-- [ ] TCP-based broker protocol
-
-- [ ] Replication
+- [x] TCP-based broker protocol
 
 - [ ] Log Retention
 
@@ -40,11 +38,11 @@ A Kafka-inspired message broker written in Go that implements the core building 
 
 - [ ] Time-Based Indexes
 
-- [ ] Zero-Copy Reads
-
 - [ ] Raft Consensus
 
 - [ ] Leader / Follower Replication
+
+- [ ] Replication
 
 ---
 
