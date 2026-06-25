@@ -1,7 +1,6 @@
 package log
 
 import (
-	"fmt"
 	"os"
 	"slices"
 	"strconv"
@@ -101,7 +100,7 @@ func (w *wal) read(offset uint64) (*models.Record, error) {
 
 	seg := w.findSegment(offset)
 	if seg == nil {
-		return nil, fmt.Errorf("offset not found")
+		return nil, ErrOffsetNotFound
 	}
 
 	return seg.Read(offset)

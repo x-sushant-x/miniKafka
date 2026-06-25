@@ -2,9 +2,11 @@ package broker
 
 import (
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/x-sushant-x/miniKafka/models"
 	"github.com/x-sushant-x/miniKafka/wal/log"
@@ -111,18 +113,20 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 		})
 
 	case "consume":
-		record, err := b.Consume(req.Topic, req.Offset)
-		if err != nil {
+		for {
+			record, err := b.Consume(req.Topic, req.Offset)
+			if err != nil {
+				if errors.Is(err, log.ErrOffsetNotFound) {
+					time.Sleep(time.Millisecond * 100)
+					continue
+				}
+			}
+
 			return json.Marshal(models.Response{
-				Success: false,
-				Error:   err.Error(),
+				Success: true,
+				Data:    string(record.Value),
 			})
 		}
-
-		return json.Marshal(models.Response{
-			Success: true,
-			Data:    string(record.Value),
-		})
 
 	default:
 		return json.Marshal(models.Response{
@@ -135,7 +139,13 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error) {
 	topic, ok := b.topics[topicName]
 	if !ok || topic == nil {
-		return nil, ErrNoTopicFound
+		createdTopic, err := log.NewTopic(topicName)
+		if err != nil {
+			return nil, log.ErrUnableToCreateTopic
+		}
+
+		b.topics[topicName] = createdTopic
+		topic = createdTopic
 	}
 
 	return topic.Read(offset)

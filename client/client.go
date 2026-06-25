@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"io"
 	"net"
 
@@ -15,22 +16,29 @@ type Client interface {
 }
 
 type TCPClient struct {
-	host string
-	port string
-	conn net.Conn
+	host         string
+	port         string
+	producerConn net.Conn
+	consumerConn net.Conn
 }
 
 func NewTCPClient(host, port string) (*TCPClient, error) {
 	address := host + ":" + port
-	conn, err := net.Dial("tcp", address)
+	producerConn, err := net.Dial("tcp", address)
+	if err != nil {
+		return nil, err
+	}
+
+	consumerConn, err := net.Dial("tcp", address)
 	if err != nil {
 		return nil, err
 	}
 
 	tcpClient := TCPClient{
-		host: host,
-		port: port,
-		conn: conn,
+		host:         host,
+		port:         port,
+		producerConn: producerConn,
+		consumerConn: consumerConn,
 	}
 
 	return &tcpClient, nil
@@ -49,7 +57,7 @@ func (c *TCPClient) Produce(topic string, data []byte) error {
 	}
 
 	if resp.Success == false {
-		return err
+		return errors.New(resp.Data)
 	}
 
 	return nil
@@ -64,7 +72,7 @@ func (c *TCPClient) Consume(topic string, offset uint64) (string, error) {
 
 	resp, err := c.send(req)
 	if err != nil {
-		return "", err
+		return "", errors.New(resp.Data)
 	}
 
 	if resp.Success == false {
@@ -75,6 +83,14 @@ func (c *TCPClient) Consume(topic string, offset uint64) (string, error) {
 }
 
 func (c *TCPClient) send(req models.Request) (*models.Response, error) {
+	var conn net.Conn
+
+	if req.Type == "produce" {
+		conn = c.producerConn
+	} else {
+		conn = c.consumerConn
+	}
+
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
@@ -83,18 +99,18 @@ func (c *TCPClient) send(req models.Request) (*models.Response, error) {
 	lenBuf := make([]byte, 4)
 	binary.BigEndian.PutUint32(lenBuf, uint32(len(data)))
 
-	_, err = c.conn.Write(lenBuf)
+	_, err = conn.Write(lenBuf)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = c.conn.Write(data)
+	_, err = conn.Write(data)
 	if err != nil {
 		return nil, err
 	}
 
 	respLenBuf := make([]byte, 4)
-	_, err = io.ReadFull(c.conn, respLenBuf)
+	_, err = io.ReadFull(conn, respLenBuf)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +118,7 @@ func (c *TCPClient) send(req models.Request) (*models.Response, error) {
 	respLen := binary.BigEndian.Uint32(respLenBuf)
 
 	respData := make([]byte, respLen)
-	_, err = io.ReadFull(c.conn, respData)
+	_, err = io.ReadFull(conn, respData)
 	if err != nil {
 		return nil, err
 	}
