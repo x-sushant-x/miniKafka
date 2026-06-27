@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/x-sushant-x/miniKafka/models"
@@ -15,8 +16,7 @@ import (
 )
 
 type Broker struct {
-	// TODO - Prevent Race Conditions
-	topics map[string]*log.Topic
+	topics sync.Map
 	port   string
 }
 
@@ -28,12 +28,12 @@ func New(port string) (*Broker, error) {
 
 	broker := Broker{
 		port:   port,
-		topics: make(map[string]*log.Topic),
+		topics: sync.Map{},
 	}
 
 	logger.Println("Loading existing topics")
 
-	filepath.WalkDir(topicsStoragePath, func(path string, d fs.DirEntry, err error) error {
+	err := filepath.WalkDir(topicsStoragePath, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
@@ -49,10 +49,14 @@ func New(port string) (*Broker, error) {
 			return err
 		}
 
-		broker.topics[topicName] = existingTopic
+		broker.topics.Store(topicName, existingTopic)
 
 		return nil
 	})
+
+	if err != nil {
+		return nil, err
+	}
 
 	return &broker, nil
 }
@@ -68,18 +72,39 @@ func (b *Broker) Start() error {
 }
 
 func (b *Broker) Produce(topicName string, record *models.Record) (*models.Record, error) {
-	topic, ok := b.topics[topicName]
-	if !ok || topic == nil {
-		createdTopic, err := log.NewTopic(topicName)
-		if err != nil {
-			return nil, log.ErrUnableToCreateTopic
-		}
+	if topic, ok := b.topics.Load(topicName); ok {
+		return topic.(*log.Topic).Append(record)
+	}
 
-		b.topics[topicName] = createdTopic
-		topic = createdTopic
+	topic, err := log.NewTopic(topicName)
+	if err != nil {
+		return nil, log.ErrUnableToCreateTopic
+	}
+
+	actual, loaded := b.topics.LoadOrStore(topicName, topic)
+	if loaded {
+		topic = actual.(*log.Topic)
 	}
 
 	return topic.Append(record)
+}
+
+func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error) {
+	if topic, ok := b.topics.Load(topicName); ok {
+		return topic.(*log.Topic).Read(offset)
+	}
+
+	topic, err := log.NewTopic(topicName)
+	if err != nil {
+		return nil, log.ErrUnableToCreateTopic
+	}
+
+	actual, loaded := b.topics.LoadOrStore(topicName, topic)
+	if loaded {
+		topic = actual.(*log.Topic)
+	}
+
+	return topic.Read(offset)
 }
 
 func (b *Broker) handleRequest(data []byte) ([]byte, error) {
@@ -134,19 +159,4 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 			Error:   "unknown request type",
 		})
 	}
-}
-
-func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error) {
-	topic, ok := b.topics[topicName]
-	if !ok || topic == nil {
-		createdTopic, err := log.NewTopic(topicName)
-		if err != nil {
-			return nil, log.ErrUnableToCreateTopic
-		}
-
-		b.topics[topicName] = createdTopic
-		topic = createdTopic
-	}
-
-	return topic.Read(offset)
 }
