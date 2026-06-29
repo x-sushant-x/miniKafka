@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -12,7 +13,7 @@ type Topic struct {
 	wal  *wal
 }
 
-func NewTopic(name string) (*Topic, error) {
+func NewTopic(ctx context.Context, name string) (*Topic, error) {
 	if name == "" {
 		return nil, ErrEmptyTopicName
 	}
@@ -24,7 +25,7 @@ func NewTopic(name string) (*Topic, error) {
 
 	topicFolder := filepath.Join(storageDir, name)
 
-	wal, err := newWAL(topicFolder)
+	wal, err := newWAL(ctx, topicFolder)
 	if err != nil {
 		return nil, err
 	}

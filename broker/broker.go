@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -18,9 +19,10 @@ import (
 type Broker struct {
 	topics sync.Map
 	port   string
+	ctx    context.Context
 }
 
-func New(port string) (*Broker, error) {
+func New(ctx context.Context, port string) (*Broker, error) {
 	topicsStoragePath := os.Getenv("TOPICS_STORAGE_DIR")
 	if topicsStoragePath == "" {
 		return nil, ErrEmptyTopicsStorageDir
@@ -29,6 +31,7 @@ func New(port string) (*Broker, error) {
 	broker := Broker{
 		port:   port,
 		topics: sync.Map{},
+		ctx:    ctx,
 	}
 
 	logger.Println("Loading existing topics")
@@ -44,7 +47,7 @@ func New(port string) (*Broker, error) {
 
 		topicName := filepath.Base(path)
 
-		existingTopic, err := log.NewTopic(topicName)
+		existingTopic, err := log.NewTopic(broker.ctx, topicName)
 		if err != nil {
 			return err
 		}
@@ -76,7 +79,7 @@ func (b *Broker) Produce(topicName string, record *models.Record) (*models.Recor
 		return topic.(*log.Topic).Append(record)
 	}
 
-	topic, err := log.NewTopic(topicName)
+	topic, err := log.NewTopic(b.ctx, topicName)
 	if err != nil {
 		return nil, log.ErrUnableToCreateTopic
 	}
@@ -94,7 +97,7 @@ func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error
 		return topic.(*log.Topic).Read(offset)
 	}
 
-	topic, err := log.NewTopic(topicName)
+	topic, err := log.NewTopic(b.ctx, topicName)
 	if err != nil {
 		return nil, log.ErrUnableToCreateTopic
 	}

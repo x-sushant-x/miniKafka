@@ -1,6 +1,7 @@
 package broker
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,7 +17,10 @@ import (
 func TestNew_EmptyTopicsStorageDir(t *testing.T) {
 	t.Setenv("TOPICS_STORAGE_DIR", "")
 
-	_, err := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	_, err := New(ctx, "9092")
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrEmptyTopicsStorageDir)
@@ -27,13 +31,16 @@ func TestNew_LoadExistingTopics(t *testing.T) {
 
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	err := os.Mkdir(filepath.Join(dir, "orders"), 0755)
 	require.NoError(t, err)
 
 	err = os.Mkdir(filepath.Join(dir, "users"), 0755)
 	require.NoError(t, err)
 
-	broker, err := New("9092")
+	broker, err := New(ctx, "9092")
 	require.NoError(t, err)
 
 	createdTopic, ok := broker.topics.Load("orders")
@@ -50,7 +57,10 @@ func TestProduce_CreatesTopic(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, err := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, err := New(ctx, "9092")
 	require.NoError(t, err)
 
 	record := &models.Record{
@@ -70,7 +80,10 @@ func TestProduce_ExistingTopic(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	r1, err := broker.Produce("orders", &models.Record{
 		Value: []byte("A"),
@@ -92,7 +105,10 @@ func TestConsume(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	_, err := broker.Produce("orders", &models.Record{
 		Value: []byte("hello"),
@@ -110,7 +126,10 @@ func TestConsume_OffsetNotFound(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	_, err := broker.Produce("orders", &models.Record{
 		Value: []byte("hello"),
@@ -128,7 +147,10 @@ func TestHandleRequest_Produce(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	req := models.Request{
 		Type:  "produce",
@@ -153,7 +175,10 @@ func TestHandleRequest_InvalidJSON(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	respBytes, err := broker.handleRequest([]byte("{"))
 
@@ -170,7 +195,10 @@ func TestHandleRequest_UnknownRequest(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	req := models.Request{
 		Type: "invalid",
@@ -191,7 +219,10 @@ func TestProduce_ConcurrentTopicCreation(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("TOPICS_STORAGE_DIR", dir)
 
-	broker, _ := New("9092")
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	broker, _ := New(ctx, "9092")
 
 	var wg sync.WaitGroup
 

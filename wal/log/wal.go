@@ -1,11 +1,14 @@
 package log
 
 import (
+	"context"
+	"log"
 	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/x-sushant-x/miniKafka/models"
 )
@@ -17,7 +20,7 @@ type wal struct {
 	mu       sync.RWMutex
 }
 
-func newWAL(dir string) (*wal, error) {
+func newWAL(ctx context.Context, dir string) (*wal, error) {
 	w := &wal{
 		dir: dir,
 	}
@@ -63,6 +66,8 @@ func newWAL(dir string) (*wal, error) {
 	}
 
 	w.active = w.segments[len(w.segments)-1]
+
+	go flushRegular(ctx, w)
 
 	return w, nil
 }
@@ -130,6 +135,14 @@ func (w *wal) close() error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	if err := w.active.index.buf.Flush(); err != nil {
+		return err
+	}
+
+	if err := w.active.store.buf.Flush(); err != nil {
+		return err
+	}
+
 	for _, seg := range w.segments {
 		if err := seg.Close(); err != nil {
 			return err
@@ -137,4 +150,37 @@ func (w *wal) close() error {
 	}
 
 	return nil
+}
+
+func (w *wal) flush() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	err := w.active.index.buf.Flush()
+	if err != nil {
+		return err
+	}
+
+	err = w.active.store.buf.Flush()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func flushRegular(ctx context.Context, wal *wal) {
+	ticker := time.NewTicker(time.Minute)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := wal.flush(); err != nil {
+				log.Printf("wal flush failed: %v", err)
+			}
+		case <-ctx.Done():
+			return
+		}
+	}
 }

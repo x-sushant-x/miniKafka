@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/joho/godotenv"
@@ -15,12 +16,15 @@ func init() {
 }
 
 func main() {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
 	brokerPort := os.Getenv("BROKER_PORT")
 	if brokerPort == "" {
 		panic("BROKER_PORT not specified in .env")
 	}
 
-	b, err := broker.New(brokerPort)
+	b, err := broker.New(ctx, brokerPort)
 	if err != nil {
 		panic("unable to initialize broker")
 	}

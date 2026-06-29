@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"os"
 	"testing"
 
@@ -16,7 +17,11 @@ func setStorageDir() {
 
 func TestNewTopic(t *testing.T) {
 	setStorageDir()
-	topic, err := NewTopic("orders")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	topic, err := NewTopic(ctx, "orders")
 
 	require.NoError(t, err)
 	require.NotNil(t, topic)
@@ -25,7 +30,10 @@ func TestNewTopic(t *testing.T) {
 
 func TestNewTopic_EmptyName(t *testing.T) {
 	setStorageDir()
-	topic, err := NewTopic("")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	topic, err := NewTopic(ctx, "")
 
 	require.ErrorIs(t, err, ErrEmptyTopicName)
 	require.Nil(t, topic)
@@ -33,7 +41,10 @@ func TestNewTopic_EmptyName(t *testing.T) {
 
 func TestTopic_AppendAndRead(t *testing.T) {
 	setStorageDir()
-	topic, err := NewTopic("append-read")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	topic, err := NewTopic(ctx, "append-read")
 	require.NoError(t, err)
 
 	record := &models.Record{
@@ -53,7 +64,10 @@ func TestTopic_AppendAndRead(t *testing.T) {
 
 func TestTopic_MultipleRecords(t *testing.T) {
 	setStorageDir()
-	topic, err := NewTopic("multiple-records")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	topic, err := NewTopic(ctx, "multiple-records")
 	require.NoError(t, err)
 
 	expected := []*models.Record{
@@ -79,7 +93,10 @@ func TestTopic_MultipleRecords(t *testing.T) {
 
 func TestTopic_AssignsOffsets(t *testing.T) {
 	setStorageDir()
-	topic, err := NewTopic("offset-test")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	topic, err := NewTopic(ctx, "offset-test")
 	require.NoError(t, err)
 
 	r1, err := topic.Append(&models.Record{
@@ -107,7 +124,10 @@ func TestTopic_AssignsOffsets(t *testing.T) {
 
 func TestTopic_ReadInvalidOffset(t *testing.T) {
 	setStorageDir()
-	topic, err := NewTopic("invalid-offset")
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	topic, err := NewTopic(ctx, "invalid-offset")
 	require.NoError(t, err)
 
 	record, err := topic.Read(100)

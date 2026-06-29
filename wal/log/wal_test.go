@@ -1,6 +1,7 @@
 package log
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -12,7 +13,10 @@ import (
 func TestWAL_AppendAndRead(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
@@ -53,7 +57,10 @@ func TestWAL_AppendAndRead(t *testing.T) {
 func TestWAL_OffsetsAreSequential(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
@@ -74,7 +81,10 @@ func TestWAL_SegmentRotation(t *testing.T) {
 	maxStoreBytes = 100
 	defer func() { maxStoreBytes = old }()
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
@@ -96,7 +106,10 @@ func TestWAL_ReadAcrossSegments(t *testing.T) {
 	maxStoreBytes = 100
 	defer func() { maxStoreBytes = old }()
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
@@ -128,7 +141,10 @@ func TestWAL_RestartRecovery(t *testing.T) {
 	dir := t.TempDir()
 
 	{
-		wal, err := newWAL(dir)
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+
+		wal, err := newWAL(ctx, dir)
 		require.NoError(t, err)
 
 		for i := 0; i < 20; i++ {
@@ -142,7 +158,10 @@ func TestWAL_RestartRecovery(t *testing.T) {
 		require.NoError(t, wal.close())
 	}
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
@@ -160,7 +179,10 @@ func TestWAL_RestartRecovery(t *testing.T) {
 func TestWAL_ReadOutOfRange(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
@@ -171,7 +193,10 @@ func TestWAL_ReadOutOfRange(t *testing.T) {
 func TestWAL_EmptyRecovery(t *testing.T) {
 	dir := t.TempDir()
 
-	wal, err := newWAL(dir)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	wal, err := newWAL(ctx, dir)
 	require.NoError(t, err)
 	defer wal.close()
 
