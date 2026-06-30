@@ -261,4 +261,3 @@ Compared to Apache Kafka, miniKafka currently does not support:
 - Batching
 - Time Indexes
 - ISR Replicas
-- Communication is currently performed over HTTP.
