@@ -2,7 +2,7 @@
 
 A Kafka-inspired message broker written in Go that implements the core building blocks of a distributed log system, including:
 
-> miniKafka is a learning project built to understand how Apache Kafka works internally by implementing its fundamental concepts from scratch.
+> miniKafka is just a learning project built to understand how Apache Kafka works internally by implementing its fundamental concepts from scratch.
 
 ---
 
@@ -244,20 +244,4 @@ Chosen because:
 - Simple
 - Effective at detecting corruption
 
----
 
-### Current Limitations
-
-Compared to Apache Kafka, miniKafka currently does not support:
-
-- Partitions
-- Consumer Groups
-- Replication
-- Leader Election
-- TCP Binary Protocol
-- Log Compaction
-- Retention Policies
-- Compression
-- Batching
-- Time Indexes
-- ISR Replicas
