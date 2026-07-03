@@ -21,7 +21,7 @@ func TestNewTopic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	topic, err := NewTopic(ctx, "orders")
+	topic, err := NewTopic(ctx, "orders", 1)
 
 	require.NoError(t, err)
 	require.NotNil(t, topic)
@@ -33,7 +33,7 @@ func TestNewTopic_EmptyName(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "")
+	topic, err := NewTopic(ctx, "", 1)
 
 	require.ErrorIs(t, err, ErrEmptyTopicName)
 	require.Nil(t, topic)
@@ -44,7 +44,7 @@ func TestTopic_AppendAndRead(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "append-read")
+	topic, err := NewTopic(ctx, "append-read", 1)
 	require.NoError(t, err)
 
 	record := &models.Record{
@@ -55,7 +55,7 @@ func TestTopic_AppendAndRead(t *testing.T) {
 	appended, err := topic.Append(record)
 	require.NoError(t, err)
 
-	readRecord, err := topic.Read(appended.Offset)
+	readRecord, err := topic.Read(appended.Offset, 1)
 	require.NoError(t, err)
 
 	require.Equal(t, appended.Offset, readRecord.Offset)
@@ -67,7 +67,7 @@ func TestTopic_MultipleRecords(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "multiple-records")
+	topic, err := NewTopic(ctx, "multiple-records", 1)
 	require.NoError(t, err)
 
 	expected := []*models.Record{
@@ -82,7 +82,7 @@ func TestTopic_MultipleRecords(t *testing.T) {
 	}
 
 	for i, expectedRecord := range expected {
-		actual, err := topic.Read(uint64(i))
+		actual, err := topic.Read(uint64(i), 1)
 		require.NoError(t, err)
 
 		// TODO - Add Offset inside store message to pass this test case.
@@ -96,7 +96,7 @@ func TestTopic_AssignsOffsets(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "offset-test")
+	topic, err := NewTopic(ctx, "offset-test", 1)
 	require.NoError(t, err)
 
 	r1, err := topic.Append(&models.Record{
@@ -127,10 +127,10 @@ func TestTopic_ReadInvalidOffset(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "invalid-offset")
+	topic, err := NewTopic(ctx, "invalid-offset", 1)
 	require.NoError(t, err)
 
-	record, err := topic.Read(100)
+	record, err := topic.Read(100, 0)
 
 	require.Error(t, err)
 	require.Nil(t, record)

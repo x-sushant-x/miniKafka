@@ -2,50 +2,66 @@ package log
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 
 	"github.com/x-sushant-x/miniKafka/models"
+	"github.com/x-sushant-x/miniKafka/wal/utils"
 )
 
 type Topic struct {
-	name string
-	wal  *wal
+	name            string
+	partitions      map[int]partition
+	totalPartitions uint32
 }
 
-func NewTopic(ctx context.Context, name string) (*Topic, error) {
+func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) {
 	if name == "" {
 		return nil, ErrEmptyTopicName
 	}
 
-	storageDir := os.Getenv("TOPICS_STORAGE_DIR")
-	if storageDir == "" {
-		return nil, ErrStorageDirVariableNoProvided
+	if partitions == 0 {
+		return nil, ErrPartitionCantBeZero
 	}
 
-	topicFolder := filepath.Join(storageDir, name)
-
-	wal, err := newWAL(ctx, topicFolder)
-	if err != nil {
-		return nil, err
+	topic := Topic{
+		name:       name,
+		partitions: make(map[int]partition),
 	}
 
-	return &Topic{
-		name,
-		wal,
-	}, nil
+	for partition := range partitions {
+		newPar, err := newPartition(ctx, topic.name, partition)
+		if err != nil {
+			return nil, err
+		}
+
+		topic.partitions[newPar.number] = *newPar
+	}
+
+	topic.totalPartitions = uint32(len(topic.partitions))
+
+	return &topic, nil
 }
 
 func (t *Topic) Append(record *models.Record) (*models.Record, error) {
-	offset, err := t.wal.append(record)
-	if err != nil {
-		return nil, err
+	partition, ok := t.selectPartition(record)
+	if !ok {
+		return nil, ErrPartitionNotFound
 	}
 
-	record.Offset = offset
-	return record, nil
+	return partition.Append(record)
 }
 
-func (t *Topic) Read(offset uint64) (*models.Record, error) {
-	return t.wal.read(offset)
+func (t *Topic) Read(offset uint64, partitionNum int) (*models.Record, error) {
+	partition, ok := t.partitions[partitionNum]
+	if !ok {
+		return nil, ErrPartitionNotFound
+	}
+
+	return partition.Read(offset)
+}
+
+func (t *Topic) selectPartition(record *models.Record) (partition, bool) {
+	hash := utils.MurmurHash(record.Key)
+	selectedParNum := hash % (t.totalPartitions)
+	par, ok := t.partitions[int(selectedParNum)]
+	return par, ok
 }

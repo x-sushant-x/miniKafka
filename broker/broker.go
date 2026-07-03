@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"sync"
@@ -34,31 +33,35 @@ func New(ctx context.Context, port string) (*Broker, error) {
 		ctx:    ctx,
 	}
 
-	logger.Println("Loading existing topics")
+	entries, err := os.ReadDir(topicsStoragePath)
+	if err != nil {
+		return nil, err
+	}
 
-	err := filepath.WalkDir(topicsStoragePath, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
+	if len(entries) > 0 {
+		logger.Println("Loading existing topics")
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
 		}
 
-		if !d.IsDir() || path == topicsStoragePath {
-			return nil
+		topicName := entry.Name()
+		topicPath := filepath.Join(topicsStoragePath, topicName)
+
+		partitions, err := os.ReadDir(topicPath)
+		if err != nil {
+			return nil, err
 		}
 
-		topicName := filepath.Base(path)
-
-		existingTopic, err := log.NewTopic(broker.ctx, topicName)
+		existingTopic, err := log.NewTopic(ctx, topicName, len(partitions))
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		broker.topics.Store(topicName, existingTopic)
-
-		return nil
-	})
-
-	if err != nil {
-		return nil, err
+		logger.Printf("Loaded Topic: %s with partitions: %d", topicName, len(partitions))
 	}
 
 	return &broker, nil
@@ -79,7 +82,7 @@ func (b *Broker) Produce(topicName string, record *models.Record) (*models.Recor
 		return topic.(*log.Topic).Append(record)
 	}
 
-	topic, err := log.NewTopic(b.ctx, topicName)
+	topic, err := log.NewTopic(b.ctx, topicName, 1)
 	if err != nil {
 		return nil, log.ErrUnableToCreateTopic
 	}
@@ -92,12 +95,12 @@ func (b *Broker) Produce(topicName string, record *models.Record) (*models.Recor
 	return topic.Append(record)
 }
 
-func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error) {
+func (b *Broker) Consume(topicName string, offset uint64, partition int) (*models.Record, error) {
 	if topic, ok := b.topics.Load(topicName); ok {
-		return topic.(*log.Topic).Read(offset)
+		return topic.(*log.Topic).Read(offset, partition)
 	}
 
-	topic, err := log.NewTopic(b.ctx, topicName)
+	topic, err := log.NewTopic(b.ctx, topicName, 1)
 	if err != nil {
 		return nil, log.ErrUnableToCreateTopic
 	}
@@ -107,7 +110,7 @@ func (b *Broker) Consume(topicName string, offset uint64) (*models.Record, error
 		topic = actual.(*log.Topic)
 	}
 
-	return topic.Read(offset)
+	return topic.Read(offset, 1)
 }
 
 func (b *Broker) handleRequest(data []byte) ([]byte, error) {
@@ -142,7 +145,7 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 
 	case "consume":
 		for {
-			record, err := b.Consume(req.Topic, req.Offset)
+			record, err := b.Consume(req.Topic, req.Offset, req.Partition)
 			if err != nil {
 				if errors.Is(err, log.ErrOffsetNotFound) {
 					time.Sleep(time.Millisecond * 100)

@@ -7,4 +7,6 @@ var (
 	ErrStorageDirVariableNoProvided = errors.New("please make sure TOPICS_STORAGE_DIR env variable to provided")
 	ErrUnableToCreateTopic          = errors.New("unable to create topic")
 	ErrOffsetNotFound               = errors.New("offset not found")
+	ErrPartitionNotFound            = errors.New("partition not found")
+	ErrPartitionCantBeZero          = errors.New("partitions can't be zero")
 )

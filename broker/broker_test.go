@@ -116,7 +116,7 @@ func TestConsume(t *testing.T) {
 
 	require.NoError(t, err)
 
-	record, err := broker.Consume("orders", 0)
+	record, err := broker.Consume("orders", 0, 0)
 
 	require.NoError(t, err)
 	require.Equal(t, "hello", string(record.Value))
@@ -137,7 +137,7 @@ func TestConsume_OffsetNotFound(t *testing.T) {
 
 	require.NoError(t, err)
 
-	_, err = broker.Consume("orders", 100)
+	_, err = broker.Consume("orders", 100, 0)
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, log.ErrOffsetNotFound)

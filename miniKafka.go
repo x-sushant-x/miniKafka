@@ -26,7 +26,7 @@ func main() {
 
 	b, err := broker.New(ctx, brokerPort)
 	if err != nil {
-		panic("unable to initialize broker")
+		panic("unable to initialize broker " + err.Error())
 	}
 
 	go startBroker(b)
