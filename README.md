@@ -25,11 +25,11 @@ A Kafka-inspired message broker written in Go that implements the core building 
 
 - [x] TCP-based broker protocol
 
+- [x] Partitioned Topics
+
 - [ ] Log Retention
 
 - [ ] Log Compaction
-
-- [ ] Partitioned Topics
 
 - [ ] Zero Copy Reads
 
