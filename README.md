@@ -2,9 +2,6 @@
 
 A Kafka-inspired message broker written in Go that implements the core building blocks of a distributed log system, including:
 
-> miniKafka is just a learning project built to understand how Apache Kafka works internally by implementing its fundamental concepts from scratch.
-
----
 
 ### Features
 
@@ -61,6 +58,10 @@ A Kafka-inspired message broker written in Go that implements the core building 
                  |    Topic    |
                  +------+------+
                         v
+                 +--------------+
+                 |  Partitions  |
+                 +------+-------+
+                        v
                  +-------------+
                  |     WAL     |
                  +------+------+
@@ -106,6 +107,9 @@ Each WAL contains one or more segments.
 
 ```text
 Topic
+  |
+  v
+Partition
   |
   v
  WAL
@@ -244,4 +248,7 @@ Chosen because:
 - Simple
 - Effective at detecting corruption
 
+---
 
+> [!CAUTION]
+> miniKafka is just a learning project built to understand how Apache Kafka works internally by implementing its fundamental concepts from scratch.
