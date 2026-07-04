@@ -1,3 +1,5 @@
+// TODO - Broker TCP API can be improved.
+
 package broker
 
 import (
@@ -35,7 +37,9 @@ func New(ctx context.Context, port string) (*Broker, error) {
 
 	entries, err := os.ReadDir(topicsStoragePath)
 	if err != nil {
-		return nil, err
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
 	}
 
 	if len(entries) > 0 {
@@ -113,6 +117,19 @@ func (b *Broker) Consume(topicName string, offset uint64, partition int) (*model
 	return topic.Read(offset, 1)
 }
 
+func (b *Broker) CreateTopic(topicName string, totalPartitions int) error {
+	if _, ok := b.topics.Load(topicName); ok {
+		return ErrTopicAlreadyExists
+	}
+
+	_, err := log.NewTopic(b.ctx, topicName, totalPartitions)
+	if err != nil {
+		return log.ErrUnableToCreateTopic
+	}
+
+	return err
+}
+
 func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 	var req models.Request
 
@@ -128,6 +145,7 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 	case "produce":
 		record := models.Record{
 			Value: []byte(req.Data),
+			Key:   []byte(req.Key),
 		}
 
 		stored, err := b.Produce(req.Topic, &record)
@@ -156,6 +174,21 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 			return json.Marshal(models.Response{
 				Success: true,
 				Data:    string(record.Value),
+			})
+		}
+
+	case "create_topic":
+
+		err := b.CreateTopic(req.Topic, req.TotalPartitions)
+		if err != nil {
+			return json.Marshal(models.Response{
+				Success: false,
+				Error:   err.Error(),
+			})
+		} else {
+			return json.Marshal(models.Response{
+				Success: true,
+				Error:   "Topic Created",
 			})
 		}
 

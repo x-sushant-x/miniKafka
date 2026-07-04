@@ -4,6 +4,8 @@ import (
 	"encoding/binary"
 	"io"
 	"net"
+
+	"github.com/x-sushant-x/miniKafka/utils"
 )
 
 const (
@@ -33,30 +35,39 @@ func (t TCPServer) StartServer(handler RequestHandler) error {
 }
 
 func (t TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
-	lenBuf := make([]byte, tcpMsgLenWidth)
+	defer conn.Close()
 
-	_, err := io.ReadFull(conn, lenBuf)
-	if err != nil {
-		return
+	for {
+		lenBuf := make([]byte, tcpMsgLenWidth)
+
+		_, err := io.ReadFull(conn, lenBuf)
+		if err != nil {
+			return
+		}
+
+		msgLen := binary.BigEndian.Uint32(lenBuf)
+
+		data := make([]byte, msgLen)
+
+		_, err = io.ReadFull(conn, data)
+		if err != nil {
+			return
+		}
+
+		resp, err := handler(data)
+		if err != nil {
+			return
+		}
+
+		respLen := make([]byte, 4)
+		binary.BigEndian.PutUint32(respLen, uint32(len(resp)))
+
+		if _, err := utils.WriteFull(conn, respLen); err != nil {
+			return
+		}
+
+		if _, err := utils.WriteFull(conn, resp); err != nil {
+			return
+		}
 	}
-
-	msgLen := binary.BigEndian.Uint32(lenBuf)
-
-	data := make([]byte, msgLen)
-
-	_, err = io.ReadFull(conn, data)
-	if err != nil {
-		return
-	}
-
-	resp, err := handler(data)
-	if err != nil {
-		return
-	}
-
-	respLen := make([]byte, 4)
-	binary.BigEndian.PutUint32(respLen, uint32(len(resp)))
-
-	conn.Write(respLen)
-	conn.Write(resp)
 }

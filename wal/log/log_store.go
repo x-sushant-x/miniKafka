@@ -15,11 +15,11 @@ import (
 	"encoding/binary"
 	"errors"
 	"hash/crc32"
-	"io"
 	"os"
 	"sync"
 
 	"github.com/x-sushant-x/miniKafka/models"
+	"github.com/x-sushant-x/miniKafka/utils"
 )
 
 const (
@@ -114,7 +114,7 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 	copy(r[lenWidth+checksumWidth+timestampWidth:], offsetBuf)
 	copy(r[lenWidth+checksumWidth+timestampWidth+offsetWidth:], record.Value)
 
-	bytesWritten, err := writeFull(store.buf, r)
+	bytesWritten, err := utils.WriteFull(store.buf, r)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -210,20 +210,4 @@ func (store *logStore) Close() error {
 	}
 
 	return store.f.Close()
-}
-
-func writeFull(w io.Writer, data []byte) (int, error) {
-	var bytesWritten int
-
-	for len(data) > 0 {
-		n, err := w.Write(data)
-		bytesWritten += n
-		if err != nil {
-			return bytesWritten, err
-		}
-
-		data = data[n:]
-	}
-
-	return bytesWritten, nil
 }

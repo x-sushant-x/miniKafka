@@ -1,8 +1,8 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
-	"time"
 
 	"github.com/x-sushant-x/miniKafka/client"
 )
@@ -13,18 +13,26 @@ func main() {
 		panic(err)
 	}
 
-	go func() {
-		time.Sleep(time.Second * 5)
-		err = c.Produce("notifications", []byte("User created: #81414"))
+	// go func() {
+	// time.Sleep(time.Second * 5)
+	for i := range 10 {
+		var buf bytes.Buffer
+		buf.WriteString("User created: #")
+		fmt.Fprintf(&buf, "%d", i)
+
+		err = c.Produce("notifications", buf.Bytes(), buf.String())
 		if err != nil {
 			panic(err)
 		}
-	}()
 
-	data, err := c.Consume("notifications", 0)
-	if err != nil {
-		panic(err)
+		fmt.Printf("Produced: %d\n", i)
 	}
+	// }()
 
-	fmt.Print(data)
+	// data, err := c.Consume("notifications", 0, 0)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// fmt.Print(data)
 }

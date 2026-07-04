@@ -13,6 +13,10 @@ import (
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
+const (
+	regularFlushTime = time.Second * 30
+)
+
 type wal struct {
 	dir      string
 	active   *segment
@@ -67,7 +71,7 @@ func newWAL(ctx context.Context, dir string) (*wal, error) {
 
 	w.active = w.segments[len(w.segments)-1]
 
-	go flushRegular(ctx, w)
+	go w.flushRegular(ctx)
 
 	return w, nil
 }
@@ -169,14 +173,15 @@ func (w *wal) flush() error {
 	return nil
 }
 
-func flushRegular(ctx context.Context, wal *wal) {
-	ticker := time.NewTicker(time.Minute)
+func (w *wal) flushRegular(ctx context.Context) {
+	ticker := time.NewTicker(regularFlushTime)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			if err := wal.flush(); err != nil {
+			log.Printf("Flushing Data: %s\n", w.dir)
+			if err := w.flush(); err != nil {
 				log.Printf("wal flush failed: %v", err)
 			}
 		case <-ctx.Done():

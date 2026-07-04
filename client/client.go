@@ -10,11 +10,6 @@ import (
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
-type Client interface {
-	Produce(topic string, data []byte) error
-	Consume(topic string, offset uint64) (string, error)
-}
-
 type TCPClient struct {
 	host         string
 	port         string
@@ -44,11 +39,12 @@ func NewTCPClient(host, port string) (*TCPClient, error) {
 	return &tcpClient, nil
 }
 
-func (c *TCPClient) Produce(topic string, data []byte) error {
+func (c *TCPClient) Produce(topic string, data []byte, key string) error {
 	req := models.Request{
 		Type:  "produce",
 		Topic: topic,
 		Data:  string(data),
+		Key:   key,
 	}
 
 	resp, err := c.send(req)
@@ -63,23 +59,44 @@ func (c *TCPClient) Produce(topic string, data []byte) error {
 	return nil
 }
 
-func (c *TCPClient) Consume(topic string, offset uint64) (string, error) {
+func (c *TCPClient) Consume(topic string, offset uint64, partition int) (string, error) {
 	req := models.Request{
-		Type:   "consume",
-		Topic:  topic,
-		Offset: offset,
+		Type:      "consume",
+		Topic:     topic,
+		Offset:    offset,
+		Partition: partition,
 	}
 
 	resp, err := c.send(req)
 	if err != nil {
-		return "", errors.New(resp.Data)
-	}
-
-	if resp.Success == false {
 		return "", err
 	}
 
+	if resp.Success == false {
+		return "", errors.New(resp.Data)
+	}
+
 	return resp.Data, nil
+}
+
+func (c *TCPClient) CreateTopic(topic string, totalPartitions int) (*models.Response, error) {
+	req := models.Request{
+		Type:            "create_topic",
+		Topic:           topic,
+		TotalPartitions: totalPartitions,
+	}
+
+	resp, err := c.send(req)
+
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.Success == false {
+		return nil, errors.New(resp.Error)
+	}
+
+	return resp, nil
 }
 
 func (c *TCPClient) send(req models.Request) (*models.Response, error) {
