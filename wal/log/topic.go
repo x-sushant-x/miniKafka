@@ -19,7 +19,7 @@ func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) 
 	}
 
 	if partitions == 0 {
-		return nil, ErrPartitionCantBeZero
+		partitions = 1
 	}
 
 	topic := Topic{

@@ -55,7 +55,7 @@ func TestTopic_AppendAndRead(t *testing.T) {
 	appended, err := topic.Append(record)
 	require.NoError(t, err)
 
-	readRecord, err := topic.Read(appended.Offset, 1)
+	readRecord, err := topic.Read(appended.Offset, 0)
 	require.NoError(t, err)
 
 	require.Equal(t, appended.Offset, readRecord.Offset)
@@ -82,7 +82,7 @@ func TestTopic_MultipleRecords(t *testing.T) {
 	}
 
 	for i, expectedRecord := range expected {
-		actual, err := topic.Read(uint64(i), 1)
+		actual, err := topic.Read(uint64(i), 0)
 		require.NoError(t, err)
 
 		// TODO - Add Offset inside store message to pass this test case.
