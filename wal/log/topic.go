@@ -8,7 +8,7 @@ import (
 )
 
 type Topic struct {
-	name            string
+	Name            string
 	partitions      map[int]partition
 	totalPartitions uint32
 }
@@ -23,12 +23,12 @@ func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) 
 	}
 
 	topic := Topic{
-		name:       name,
+		Name:       name,
 		partitions: make(map[int]partition),
 	}
 
 	for partition := range partitions {
-		newPar, err := newPartition(ctx, topic.name, partition)
+		newPar, err := newPartition(ctx, topic.Name, partition)
 		if err != nil {
 			return nil, err
 		}
@@ -57,6 +57,16 @@ func (t *Topic) Read(offset uint64, partitionNum int) (*models.Record, error) {
 	}
 
 	return partition.Read(offset)
+}
+
+func (t *Topic) Close() error {
+	for _, partition := range t.partitions {
+		if err := partition.wal.close(); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (t *Topic) selectPartition(record *models.Record) (partition, bool) {

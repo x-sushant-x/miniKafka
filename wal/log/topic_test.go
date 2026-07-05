@@ -25,7 +25,7 @@ func TestNewTopic(t *testing.T) {
 
 	require.NoError(t, err)
 	require.NotNil(t, topic)
-	require.Equal(t, "orders", topic.name)
+	require.Equal(t, "orders", topic.Name)
 }
 
 func TestNewTopic_EmptyName(t *testing.T) {

@@ -21,6 +21,7 @@ type Broker struct {
 	topics sync.Map
 	port   string
 	ctx    context.Context
+	server *TCPServer
 }
 
 func New(ctx context.Context, port string) (*Broker, error) {
@@ -68,17 +69,18 @@ func New(ctx context.Context, port string) (*Broker, error) {
 		logger.Printf("Loaded Topic: %s with partitions: %d", topicName, len(partitions))
 	}
 
+	server, err := NewTCPServer(port)
+	if err != nil {
+		return nil, err
+	}
+
+	broker.server = server
 	return &broker, nil
 }
 
 func (b *Broker) Start() error {
 	logger.Println("Starting TCP Server on port:", b.port)
-
-	server := TCPServer{
-		Port: b.port,
-	}
-
-	return server.StartServer(b.handleRequest)
+	return b.server.StartServer(b.handleRequest)
 }
 
 func (b *Broker) Produce(topicName string, record *models.Record) (*models.Record, error) {
@@ -115,6 +117,21 @@ func (b *Broker) Consume(topicName string, offset uint64, partition int) (*model
 	}
 
 	return topic.Read(offset, 1)
+}
+
+func (b *Broker) Shutdown() {
+	b.server.close()
+	b.server.wg.Wait()
+
+	b.topics.Range(func(key, value any) bool {
+		topic := value.(*log.Topic)
+
+		if err := topic.Close(); err != nil {
+			logger.Println("error while closing topic:", topic.Name)
+		}
+
+		return true
+	})
 }
 
 func (b *Broker) CreateTopic(topicName string, totalPartitions int) error {
@@ -163,18 +180,27 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 
 	case "consume":
 		for {
-			record, err := b.Consume(req.Topic, req.Offset, req.Partition)
-			if err != nil {
-				if errors.Is(err, log.ErrOffsetNotFound) {
-					time.Sleep(time.Millisecond * 100)
-					continue
-				}
-			}
+			select {
+			case <-b.ctx.Done():
+				return json.Marshal(models.Response{
+					Success: false,
+					Error:   "broker shutting down",
+				})
 
-			return json.Marshal(models.Response{
-				Success: true,
-				Data:    string(record.Value),
-			})
+			default:
+				record, err := b.Consume(req.Topic, req.Offset, req.Partition)
+				if err != nil {
+					if errors.Is(err, log.ErrOffsetNotFound) {
+						time.Sleep(time.Millisecond * 100)
+						continue
+					}
+				}
+
+				return json.Marshal(models.Response{
+					Success: true,
+					Data:    string(record.Value),
+				})
+			}
 		}
 
 	case "create_topic":

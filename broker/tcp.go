@@ -2,8 +2,10 @@ package broker
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/x-sushant-x/miniKafka/utils"
 )
@@ -16,25 +18,41 @@ type RequestHandler func([]byte) ([]byte, error)
 
 type TCPServer struct {
 	Port string
+	ln   net.Listener
+	wg   sync.WaitGroup
 }
 
-func (t TCPServer) StartServer(handler RequestHandler) error {
-	ln, err := net.Listen("tcp", ":"+t.Port)
+func NewTCPServer(port string) (*TCPServer, error) {
+	ln, err := net.Listen("tcp", ":"+port)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	server := TCPServer{
+		Port: port,
+		ln:   ln,
+	}
+
+	return &server, nil
+}
+
+func (t *TCPServer) StartServer(handler RequestHandler) error {
 	for {
-		conn, err := ln.Accept()
+		conn, err := t.ln.Accept()
 		if err != nil {
+			if errors.Is(err, net.ErrClosed) {
+				return nil
+			}
 			continue
 		}
 
-		go t.handleConnection(conn, handler)
+		t.wg.Go(func() {
+			go t.handleConnection(conn, handler)
+		})
 	}
 }
 
-func (t TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
+func (t *TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
 	defer conn.Close()
 
 	for {
@@ -70,4 +88,8 @@ func (t TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
 			return
 		}
 	}
+}
+
+func (t *TCPServer) close() {
+	t.ln.Close()
 }
