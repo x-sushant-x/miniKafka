@@ -1,0 +1,6 @@
+{
+    "topics_storage_dir" : "/Users/sushantdhiman/GoLang/miniKafka/.logs",
+    "broker_port" : "5555",
+    "retention_time_seconds" : 30,
+    "cleanup_check_interval_seconds" : 60
+}

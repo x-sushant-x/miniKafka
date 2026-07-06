@@ -3,9 +3,9 @@ package log
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 
+	"github.com/x-sushant-x/miniKafka/config"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
@@ -15,7 +15,7 @@ type partition struct {
 }
 
 func newPartition(ctx context.Context, topicName string, number int) (*partition, error) {
-	storageDir := os.Getenv("TOPICS_STORAGE_DIR")
+	storageDir := config.Config.TopicsStorageDir
 	if storageDir == "" {
 		return nil, ErrStorageDirVariableNoProvided
 	}

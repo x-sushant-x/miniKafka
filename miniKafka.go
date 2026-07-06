@@ -7,28 +7,20 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/joho/godotenv"
 	"github.com/x-sushant-x/miniKafka/broker"
+	"github.com/x-sushant-x/miniKafka/config"
 )
-
-func init() {
-	err := godotenv.Load(".env")
-	if err != nil {
-		panic("unable to load .env")
-	}
-}
 
 func main() {
 	log.Println("Starting miniKafka broker")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	brokerPort := os.Getenv("BROKER_PORT")
-	if brokerPort == "" {
-		panic("BROKER_PORT not specified in .env")
+	if err := config.LoadConfig(); err != nil {
+		panic("unable to load config:" + err.Error())
 	}
 
-	b, err := broker.New(ctx, brokerPort)
+	b, err := broker.New(ctx, config.Config.BrokerPort)
 	if err != nil {
 		panic("unable to initialize broker " + err.Error())
 	}

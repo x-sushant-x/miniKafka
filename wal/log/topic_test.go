@@ -2,17 +2,19 @@ package log
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"github.com/x-sushant-x/miniKafka/config"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
 const STORAGE_DIR = "/Users/sushantdhiman/GoLang/miniKafka/.logs"
 
 func setStorageDir() {
-	os.Setenv("TOPICS_STORAGE_DIR", STORAGE_DIR)
+	config.Config = config.Configuration{
+		TopicsStorageDir: "/Users/sushantdhiman/GoLang/miniKafka/.logs",
+	}
 }
 
 func TestNewTopic(t *testing.T) {

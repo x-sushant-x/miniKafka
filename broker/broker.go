@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/x-sushant-x/miniKafka/config"
 	"github.com/x-sushant-x/miniKafka/models"
 	"github.com/x-sushant-x/miniKafka/wal/log"
 
@@ -25,7 +26,7 @@ type Broker struct {
 }
 
 func New(ctx context.Context, port string) (*Broker, error) {
-	topicsStoragePath := os.Getenv("TOPICS_STORAGE_DIR")
+	topicsStoragePath := config.Config.TopicsStorageDir
 	if topicsStoragePath == "" {
 		return nil, ErrEmptyTopicsStorageDir
 	}
