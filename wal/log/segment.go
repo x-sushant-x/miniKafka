@@ -1,9 +1,12 @@
 package log
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
+	"time"
 
 	"github.com/x-sushant-x/miniKafka/models"
 )
@@ -14,8 +17,14 @@ type segment struct {
 	store            *logStore
 	index            *index
 	baseOff, nextOff uint64
+	metadata         metadata
 }
 
+type metadata struct {
+	CreationTime time.Time `json:"creation_time"`
+}
+
+// TODO - Handle partial errors and reverse file creation.
 func newSegment(baseOff uint64, dir string) (*segment, error) {
 	s := &segment{
 		baseOff: baseOff,
@@ -48,6 +57,48 @@ func newSegment(baseOff uint64, dir string) (*segment, error) {
 
 	indexEntries := s.index.size / 12 // 12 is the size of each entry in index file
 	s.nextOff = s.baseOff + indexEntries
+
+	// Metadata
+	metadata := metadata{
+		CreationTime: time.Now(),
+	}
+
+	metaFileExists := false
+	metaFileName := path.Join(dir, fmt.Sprintf("%d.meta", baseOff))
+
+	_, err = os.Stat(metaFileName)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	} else {
+		metaFileExists = true
+	}
+
+	if !metaFileExists {
+		metaFile, err := os.OpenFile(metaFileName, os.O_CREATE|os.O_RDWR, 0644)
+		if err != nil {
+			return nil, err
+		}
+		defer metaFile.Close()
+
+		// OPTIMIZE - For now json metadata is fine. But we can convert it to binary as well.
+		if err := json.NewEncoder(metaFile).Encode(metadata); err != nil {
+			return nil, err
+		}
+	} else {
+		data, err := os.ReadFile(metaFileName)
+		if err != nil {
+			return nil, err
+		}
+
+		err = json.Unmarshal(data, &metadata)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	s.metadata = metadata
 
 	return s, nil
 }
