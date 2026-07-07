@@ -81,6 +81,7 @@ func New(ctx context.Context, port string) (*Broker, error) {
 
 func (b *Broker) Start() error {
 	logger.Println("Starting TCP Server on port:", b.port)
+	go b.startDestroyer()
 	return b.server.StartServer(b.handleRequest)
 }
 
@@ -225,4 +226,30 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 			Error:   "unknown request type",
 		})
 	}
+}
+
+// Destroyer is responsible for deleting old partitions based on retention time. This time is stored in configuration. These are 2 important configurations:
+// 1. retention_time_days - Total number of days to keep a segment on disk.
+// 2. cleanup_check_interval_seconds - Tells how often to check expired segments and delete them.
+func (b *Broker) startDestroyer() {
+	ticker := time.NewTicker((time.Hour * 24) * time.Duration(config.Config.CleanupCheckIntervalSeconds))
+
+	for {
+		select {
+		case <-ticker.C:
+			b.checkForExpiredSegments()
+		case <-b.ctx.Done():
+			return
+		}
+	}
+}
+
+func (b *Broker) checkForExpiredSegments() {
+	logger.Println("Deleting expired segments")
+
+	b.topics.Range(func(key, value any) bool {
+		topic := value.(*log.Topic)
+		topic.DeleteExpiredSegments()
+		return true
+	})
 }

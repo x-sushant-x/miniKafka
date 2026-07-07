@@ -211,3 +211,10 @@ func (store *logStore) Close() error {
 
 	return store.f.Close()
 }
+
+func (store *logStore) Delete() error {
+	store.mu.Lock()
+	defer store.mu.Unlock()
+
+	return os.Remove(store.f.Name())
+}

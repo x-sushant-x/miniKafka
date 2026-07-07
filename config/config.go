@@ -10,7 +10,7 @@ var Config Configuration
 type Configuration struct {
 	TopicsStorageDir            string `json:"topics_storage_dir"`
 	BrokerPort                  string `json:"broker_port"`
-	RetentionTimeSeconds        int    `json:"retention_time_seconds"`
+	RetentionTimeDays           int    `json:"retention_time_days"`
 	CleanupCheckIntervalSeconds int    `json:"cleanup_check_interval_seconds"`
 }
 

@@ -112,3 +112,10 @@ func (i *index) Read(off uint32) (pos uint64, err error) {
 	pos = indexEnc.Uint64(data)
 	return pos, err
 }
+
+func (i *index) Delete() error {
+	if err := i.Close(); err != nil {
+		return err
+	}
+	return os.Remove(i.f.Name())
+}
