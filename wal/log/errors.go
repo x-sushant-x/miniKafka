@@ -9,4 +9,5 @@ var (
 	ErrOffsetNotFound               = errors.New("offset not found")
 	ErrPartitionNotFound            = errors.New("partition not found")
 	ErrPartitionCantBeZero          = errors.New("partitions can't be zero")
+	ErrTopicAlreadyExists           = errors.New("topic already exists")
 )

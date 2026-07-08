@@ -137,15 +137,17 @@ func (b *Broker) Shutdown() {
 }
 
 func (b *Broker) CreateTopic(topicName string, totalPartitions int) error {
-	if _, ok := b.topics.Load(topicName); ok {
-		return ErrTopicAlreadyExists
+	_, loaded := b.topics.Load(topicName)
+	if loaded {
+		return log.ErrTopicAlreadyExists
 	}
 
-	_, err := log.NewTopic(b.ctx, topicName, totalPartitions)
+	topic, err := log.NewTopic(b.ctx, topicName, totalPartitions)
 	if err != nil {
 		return log.ErrUnableToCreateTopic
 	}
 
+	b.topics.Store(topicName, topic)
 	return err
 }
 

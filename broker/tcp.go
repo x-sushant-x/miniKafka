@@ -17,9 +17,11 @@ const (
 type RequestHandler func([]byte) ([]byte, error)
 
 type TCPServer struct {
-	Port string
-	ln   net.Listener
-	wg   sync.WaitGroup
+	Port  string
+	ln    net.Listener
+	wg    sync.WaitGroup
+	mu    sync.Mutex
+	conns map[net.Conn]struct{}
 }
 
 func NewTCPServer(port string) (*TCPServer, error) {
@@ -29,8 +31,9 @@ func NewTCPServer(port string) (*TCPServer, error) {
 	}
 
 	server := TCPServer{
-		Port: port,
-		ln:   ln,
+		Port:  port,
+		ln:    ln,
+		conns: make(map[net.Conn]struct{}),
 	}
 
 	return &server, nil
@@ -46,14 +49,27 @@ func (t *TCPServer) StartServer(handler RequestHandler) error {
 			continue
 		}
 
-		t.wg.Go(func() {
-			go t.handleConnection(conn, handler)
-		})
+		t.mu.Lock()
+		t.conns[conn] = struct{}{}
+		t.mu.Unlock()
+
+		t.wg.Add(1)
+
+		go func() {
+			defer t.wg.Done()
+			t.handleConnection(conn, handler)
+		}()
 	}
 }
 
 func (t *TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
-	defer conn.Close()
+	defer func() {
+		t.mu.Lock()
+		delete(t.conns, conn)
+		t.mu.Unlock()
+
+		conn.Close()
+	}()
 
 	for {
 		lenBuf := make([]byte, tcpMsgLenWidth)
@@ -92,4 +108,12 @@ func (t *TCPServer) handleConnection(conn net.Conn, handler RequestHandler) {
 
 func (t *TCPServer) close() {
 	t.ln.Close()
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	for conn := range t.conns {
+		conn.Write([]byte("miniKafka Server Shutting Down. Terminating Connection....\n"))
+		conn.Close()
+	}
 }
