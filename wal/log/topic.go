@@ -11,7 +11,7 @@ import (
 
 type Topic struct {
 	Name            string
-	partitions      map[int]partition
+	partitions      map[int]*partition
 	totalPartitions uint32
 }
 
@@ -26,7 +26,7 @@ func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) 
 
 	topic := Topic{
 		Name:       name,
-		partitions: make(map[int]partition),
+		partitions: make(map[int]*partition),
 	}
 
 	for partition := range partitions {
@@ -35,7 +35,7 @@ func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) 
 			return nil, err
 		}
 
-		topic.partitions[newPar.number] = *newPar
+		topic.partitions[newPar.number] = newPar
 	}
 
 	topic.totalPartitions = uint32(len(topic.partitions))
@@ -71,7 +71,7 @@ func (t *Topic) Close() error {
 	return nil
 }
 
-func (t *Topic) selectPartition(record *models.Record) (partition, bool) {
+func (t *Topic) selectPartition(record *models.Record) (*partition, bool) {
 	hash := utils.MurmurHash(record.Key)
 	selectedParNum := hash % (t.totalPartitions)
 	par, ok := t.partitions[int(selectedParNum)]
