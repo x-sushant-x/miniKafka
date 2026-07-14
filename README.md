@@ -252,3 +252,6 @@ Chosen because:
 
 > [!CAUTION]
 > miniKafka is just a learning project built to understand how Apache Kafka works internally by implementing its fundamental concepts from scratch.
+
+---
+Open to suggestions via issues.
