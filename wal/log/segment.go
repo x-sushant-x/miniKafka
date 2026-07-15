@@ -8,26 +8,31 @@ import (
 	"path"
 	"time"
 
+	"github.com/x-sushant-x/miniKafka/config"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
-var maxStoreBytes = 16 * 1024 * 1024 // 16MB
+// var maxStoreBytes = 16 * 1024 * 1024 // 16MB
+var maxStoreBytes = 128
 
 type segment struct {
 	store            *logStore
 	index            *index
 	baseOff, nextOff uint64
 	metadata         metadata
+	dir              string
 }
 
 type metadata struct {
 	CreationTime time.Time `json:"creation_time"`
+	ExpireAt     time.Time `json:"expire_time"`
 }
 
 // TODO - Handle partial errors and reverse file creation.
 func newSegment(baseOff uint64, dir string) (*segment, error) {
 	s := &segment{
 		baseOff: baseOff,
+		dir:     dir,
 	}
 
 	storeFileName := path.Join(dir, fmt.Sprintf("%d.store", baseOff))
@@ -59,8 +64,10 @@ func newSegment(baseOff uint64, dir string) (*segment, error) {
 	s.nextOff = s.baseOff + indexEntries
 
 	// Metadata
+	createdAt := time.Now()
 	metadata := metadata{
-		CreationTime: time.Now(),
+		CreationTime: createdAt,
+		ExpireAt:     createdAt.Add(time.Duration(config.Config.RetentionTimeDays) * time.Hour * 24),
 	}
 
 	metaFileExists := false
@@ -151,4 +158,28 @@ func (s *segment) Close() error {
 		return err
 	}
 	return s.store.Close()
+}
+
+func (s *segment) IsExpired() bool {
+	return time.Now().After(s.metadata.ExpireAt)
+}
+
+func (s *segment) delete() error {
+	if err := s.Close(); err != nil {
+		return err
+	}
+
+	files := []string{
+		path.Join(s.dir, fmt.Sprintf("%d.store", s.baseOff)),
+		path.Join(s.dir, fmt.Sprintf("%d.index", s.baseOff)),
+		path.Join(s.dir, fmt.Sprintf("%d.meta", s.baseOff)),
+	}
+
+	for _, file := range files {
+		if err := os.Remove(file); err != nil && !os.IsNotExist(err) {
+			return err
+		}
+	}
+
+	return nil
 }

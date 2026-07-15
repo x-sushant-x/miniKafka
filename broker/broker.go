@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -234,7 +235,7 @@ func (b *Broker) handleRequest(data []byte) ([]byte, error) {
 // 1. retention_time_days - Total number of days to keep a segment on disk.
 // 2. cleanup_check_interval_seconds - Tells how often to check expired segments and delete them.
 func (b *Broker) startDestroyer() {
-	ticker := time.NewTicker((time.Hour * 24) * time.Duration(config.Config.CleanupCheckIntervalSeconds))
+	ticker := time.NewTicker(time.Duration(config.Config.CleanupCheckIntervalSeconds) * time.Second)
 
 	for {
 		select {
@@ -251,7 +252,9 @@ func (b *Broker) checkForExpiredSegments() {
 
 	b.topics.Range(func(key, value any) bool {
 		topic := value.(*log.Topic)
-		topic.DeleteExpiredSegments()
+		if err := topic.DeleteExpiredSegments(); err != nil {
+			fmt.Println("Error: unable to delete segment.", err)
+		}
 		return true
 	})
 }

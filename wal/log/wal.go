@@ -189,3 +189,24 @@ func (w *wal) flushRegular(ctx context.Context) {
 		}
 	}
 }
+
+func (w *wal) deleteExpiredSegments() error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	var remaining []*segment
+
+	for _, seg := range w.segments {
+		if seg == w.active || !seg.IsExpired() {
+			remaining = append(remaining, seg)
+			continue
+		}
+
+		if err := seg.delete(); err != nil {
+			return err
+		}
+	}
+
+	w.segments = remaining
+	return nil
+}

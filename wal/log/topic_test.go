@@ -13,7 +13,8 @@ const STORAGE_DIR = "/Users/sushantdhiman/GoLang/miniKafka/.logs"
 
 func setStorageDir() {
 	config.Config = config.Configuration{
-		TopicsStorageDir: "/Users/sushantdhiman/GoLang/miniKafka/.logs",
+		TopicsStorageDir:  "/Users/sushantdhiman/GoLang/miniKafka/.logs",
+		RetentionTimeDays: 45,
 	}
 }
 
@@ -76,6 +77,19 @@ func TestTopic_MultipleRecords(t *testing.T) {
 		{Value: []byte("record-1"), Offset: 0},
 		{Value: []byte("record-2"), Offset: 1},
 		{Value: []byte("record-3"), Offset: 2},
+		{Value: []byte("record-4"), Offset: 3},
+		{Value: []byte("record-5"), Offset: 4},
+		{Value: []byte("record-6"), Offset: 5},
+		{Value: []byte("record-7"), Offset: 6},
+		{Value: []byte("record-8"), Offset: 7},
+		{Value: []byte("record-9"), Offset: 8},
+		{Value: []byte("record-10"), Offset: 9},
+		{Value: []byte("record-11"), Offset: 10},
+		{Value: []byte("record-12"), Offset: 11},
+		{Value: []byte("record-13"), Offset: 12},
+		{Value: []byte("record-14"), Offset: 13},
+		{Value: []byte("record-15"), Offset: 14},
+		{Value: []byte("record-16"), Offset: 15},
 	}
 
 	for _, r := range expected {

@@ -2,9 +2,7 @@ package log
 
 import (
 	"context"
-	"time"
 
-	"github.com/x-sushant-x/miniKafka/config"
 	"github.com/x-sushant-x/miniKafka/models"
 	"github.com/x-sushant-x/miniKafka/wal/utils"
 )
@@ -79,19 +77,11 @@ func (t *Topic) selectPartition(record *models.Record) (*partition, bool) {
 }
 
 func (t *Topic) DeleteExpiredSegments() error {
-	now := time.Now()
-	retentionDays := config.Config.RetentionTimeDays
-	retentionTime := now.Add(time.Duration(-retentionDays) * time.Second)
-
 	for _, par := range t.partitions {
-		segments := par.wal.segments
-
-		for _, seg := range segments {
-			if seg.metadata.CreationTime.Before(retentionTime) {
-				// TODO - Safely handle segment deletion
-			}
+		err := par.wal.deleteExpiredSegments()
+		if err != nil {
+			return err
 		}
 	}
-
 	return nil
 }
