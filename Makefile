@@ -6,3 +6,6 @@ run: build
 
 test:
 	@ rm -rf .logs && go test -race ./...
+
+build-mkt:
+	@ go build -o bin/ mkt/mkt.go 
