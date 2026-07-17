@@ -12,8 +12,7 @@ import (
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
-// var maxStoreBytes = 16 * 1024 * 1024 // 16MB
-var maxStoreBytes = 128
+var maxStoreBytes = 16 * 1024 * 1024 // 16MB
 
 type segment struct {
 	store            *logStore
