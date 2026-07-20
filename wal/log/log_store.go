@@ -14,20 +14,20 @@ import (
 	"bufio"
 	"encoding/binary"
 	"errors"
+	"hash"
 	"hash/crc32"
 	"os"
 	"sync"
 
 	"github.com/x-sushant-x/miniKafka/models"
-	"github.com/x-sushant-x/miniKafka/utils"
 )
 
 const (
 	lenWidth       = 4       // Bytes
 	checksumWidth  = 4       // Bytes
-	messageMaxSize = 1000000 // Bytes
 	timestampWidth = 8       // Bytes
 	offsetWidth    = 8       // Bytes
+	messageMaxSize = 1000000 // Bytes
 )
 
 var (
@@ -37,10 +37,12 @@ var (
 )
 
 type logStore struct {
-	mu   sync.RWMutex
-	f    *os.File
-	buf  *bufio.Writer
-	size uint64
+	mu     sync.RWMutex
+	f      *os.File
+	buf    *bufio.Writer
+	size   uint64
+	crc    hash.Hash32
+	header [24]byte
 }
 
 func newLogStore(file *os.File) (*logStore, error) {
@@ -57,6 +59,7 @@ func newLogStore(file *os.File) (*logStore, error) {
 		f:    file,
 		buf:  bufio.NewWriter(file),
 		size: uint64(fileInfo.Size()),
+		crc:  crc32.NewIEEE(),
 	}, nil
 }
 
@@ -74,7 +77,6 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 	}
 
 	store.mu.Lock()
-	defer store.mu.Unlock()
 
 	/*
 	 * pos tells the position at which current entry is being appended in log file.
@@ -82,14 +84,11 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 	 */
 	pos = store.size
 
-	lenBuf := make([]byte, lenWidth)
-	enc.PutUint32(lenBuf, msgLen)
+	h := store.header
 
-	timestampBuf := make([]byte, timestampWidth)
-	enc.PutUint64(timestampBuf, record.Timestamp)
-
-	offsetBuf := make([]byte, offsetWidth)
-	enc.PutUint64(offsetBuf, record.Offset)
+	// lenBuf := make([]byte, lenWidth)
+	// var lenBuf [lenWidth]byte
+	enc.PutUint32(h[0:4], msgLen)
 
 	/*
 	 * We are using CRC32 for checksum because:
@@ -97,36 +96,55 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
 	 * 2. It is extremely fst.
 	 * 3. It take only 4 byte of space.
 	 */
-	crc := crc32.NewIEEE()
-	crc.Write(lenBuf)
-	crc.Write(record.Value)
-	checksum := crc.Sum32()
-	checksumBuf := make([]byte, checksumWidth)
-	binary.BigEndian.PutUint32(checksumBuf, checksum)
+	store.crc.Write(h[0:4])
+	store.crc.Write(record.Value)
+	checksum := store.crc.Sum32()
+	store.crc.Reset()
 
-	// Instead of invoking 3 different Write calls for 3 different data we are combining them and writing at once.
-	// This reduces the cases of errors.
-	recordLen := lenWidth + checksumWidth + timestampWidth + offsetWidth + msgLen
-	r := make([]byte, recordLen)
-	copy(r[0:], lenBuf)
-	copy(r[lenWidth:], checksumBuf)
-	copy(r[lenWidth+checksumWidth:], timestampBuf)
-	copy(r[lenWidth+checksumWidth+timestampWidth:], offsetBuf)
-	copy(r[lenWidth+checksumWidth+timestampWidth+offsetWidth:], record.Value)
+	// checksumBuf := make([]byte, checksumWidth)
+	// var checksumBuf [checksumWidth]byte
+	// binary.BigEndian.PutUint32(checksumBuf[:], checksum)
+	enc.PutUint32(h[4:8], checksum)
 
-	bytesWritten, err := utils.WriteFull(store.buf, r)
-	if err != nil {
-		return 0, 0, err
-	}
+	// timestampBuf := make([]byte, timestampWidth)
+	// var timestampBuf [timestampWidth]byte
+	enc.PutUint64(h[8:16], record.Timestamp)
 
-	if uint64(bytesWritten) != uint64(recordLen) {
-		err = errors.New("unable to write to wal")
-		return
-	}
+	// offsetBuf := make([]byte, offsetWidth)
+	// var offsetBuf [offsetWidth]byte
+	enc.PutUint64(h[16:24], record.Offset)
+
+	// recordLen := lenWidth + checksumWidth + timestampWidth + offsetWidth + msgLen
+	// r := make([]byte, recordLen)
+	// copy(r[0:], lenBuf)
+	// copy(r[lenWidth:], checksumBuf)
+	// copy(r[lenWidth+checksumWidth:], timestampBuf)
+	// copy(r[lenWidth+checksumWidth+timestampWidth:], offsetBuf)
+	// copy(r[lenWidth+checksumWidth+timestampWidth+offsetWidth:], record.Value)
+
+	// store.buf.Write(lenBuf[:])
+	// store.buf.Write(checksumBuf[:])
+	// store.buf.Write(timestampBuf[:])
+	// store.buf.Write(offsetBuf[:])
+
+	// TODO - Find how can we handle error here.
+	store.buf.Write(h[:])
+	store.buf.Write(record.Value)
+
+	// bytesWritten, err := utils.WriteFull(store.buf, r)
+	// if err != nil {
+	// 	return 0, 0, err
+	// }
+
+	// if uint64(bytesWritten) != uint64(recordLen) {
+	// 	err = errors.New("unable to write to wal")
+	// 	return
+	// }
 
 	totalBytesWritten = lenWidth + checksumWidth + timestampWidth + offsetWidth + len(record.Value)
 	store.size += uint64(totalBytesWritten)
 
+	store.mu.Unlock()
 	return
 }
 

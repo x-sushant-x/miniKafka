@@ -2,11 +2,13 @@ package log
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
@@ -209,4 +211,48 @@ func TestClose(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected error on second close")
 	}
+}
+
+func BenchmarkAppend(b *testing.B) {
+	storeFile, err := os.CreateTemp(b.TempDir(), "a.store")
+	require.NoError(b, err)
+
+	store, err := newLogStore(storeFile)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+
+	msgSize := 1024 // 1KB
+
+	value := make([]byte, msgSize)
+
+	record := &models.Record{
+		Value: value,
+	}
+
+	b.ResetTimer()
+
+	start := time.Now()
+
+	for i := 0; i < b.N; i++ {
+		record.Offset = uint64(i)
+		record.Timestamp = uint64(time.Now().UnixNano())
+
+		if _, _, err := store.Append(record); err != nil {
+			b.Fatal(err)
+		}
+	}
+
+	elapsed := time.Since(start)
+
+	msgPerSec := float64(b.N) / elapsed.Seconds()
+
+	b.StopTimer()
+
+	fmt.Printf("\n")
+	fmt.Printf("Operations      : %d\n", b.N)
+	fmt.Printf("Elapsed         : %v\n", elapsed)
+	fmt.Printf("Throughput      : %.2f msgs/sec\n", msgPerSec)
+	fmt.Println()
 }
