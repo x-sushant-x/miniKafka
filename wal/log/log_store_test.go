@@ -3,6 +3,7 @@ package log
 import (
 	"errors"
 	"fmt"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"testing"
@@ -294,9 +295,8 @@ func BenchmarkReadSequential(b *testing.B) {
 	}
 
 	idx := 0
-	b.ResetTimer()
 
-	for i := 0; i < b.N; i++ {
+	for b.Loop() {
 		_, err := store.Read(positions[idx])
 		if err != nil {
 			b.Fatal(err)
@@ -305,6 +305,53 @@ func BenchmarkReadSequential(b *testing.B) {
 		idx++
 		if idx == len(positions) {
 			idx = 0
+		}
+	}
+}
+
+func BenchmarkReadRandom(b *testing.B) {
+	tmp, err := os.CreateTemp("", "wal-read.store")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.Remove(tmp.Name())
+
+	store, err := newLogStore(tmp)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+
+	const numRecords = 100000
+
+	positions := make([]uint64, numRecords)
+
+	payload := make([]byte, 1024) // 1KB message
+
+	for i := 0; i < numRecords; i++ {
+		_, pos, err := store.Append(&models.Record{
+			Value:     payload,
+			Timestamp: uint64(i),
+			Offset:    uint64(i),
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		positions[i] = pos
+	}
+
+	if err := store.buf.Flush(); err != nil {
+		b.Fatal(err)
+	}
+
+	r := rand.New(rand.NewSource(42))
+
+	for b.Loop() {
+		pos := uint64(positions[r.Intn(len(positions))])
+		_, err := store.Read(pos)
+		if err != nil {
+			b.Fatal(err)
 		}
 	}
 }

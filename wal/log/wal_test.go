@@ -117,7 +117,7 @@ func TestWAL_ReadAcrossSegments(t *testing.T) {
 
 	for i := 0; i < 50; i++ {
 		record := &models.Record{
-			Value:     []byte(fmt.Sprintf("msg-%d", i)),
+			Value:     fmt.Appendf(nil, "msg-%d", i),
 			Timestamp: uint64(time.Now().Unix()),
 		}
 
@@ -131,7 +131,7 @@ func TestWAL_ReadAcrossSegments(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(
 			t,
-			[]byte(fmt.Sprintf("msg-%d", i)),
+			fmt.Appendf(nil, "msg-%d", i),
 			record.Value,
 		)
 	}
@@ -149,7 +149,7 @@ func TestWAL_RestartRecovery(t *testing.T) {
 
 		for i := 0; i < 20; i++ {
 			_, err := wal.append(&models.Record{
-				Value:     []byte(fmt.Sprintf("msg-%d", i)),
+				Value:     fmt.Appendf(nil, "msg-%d", i),
 				Timestamp: uint64(time.Now().Unix()),
 			})
 			require.NoError(t, err)
@@ -170,7 +170,7 @@ func TestWAL_RestartRecovery(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(
 			t,
-			[]byte(fmt.Sprintf("msg-%d", i)),
+			fmt.Appendf(nil, "msg-%d", i),
 			record.Value,
 		)
 	}

@@ -91,3 +91,14 @@ BenchmarkReadSequential-8   	  542662	      1896 ns/op	    1112 B/op	       3 al
 PASS
 ok  	github.com/x-sushant-x/miniKafka/wal/log	2.585s
 ```
+
+### BencharkReadRandom
+```
+goos: darwin
+goarch: arm64
+pkg: github.com/x-sushant-x/miniKafka/wal/log
+cpu: Apple M1
+BenchmarkReadRandom-8   	  496015	      2267 ns/op	    1112 B/op	       3 allocs/op
+PASS
+ok  	github.com/x-sushant-x/miniKafka/wal/log	2.047s
+```
