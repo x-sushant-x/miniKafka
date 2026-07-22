@@ -1,3 +1,5 @@
+### Append
+
 Initial - 
 
 ```
@@ -62,4 +64,30 @@ Throughput      : 445865.52 msgs/sec
   453127	      2243 ns/op	      24 B/op	       1 allocs/op
 PASS
 ok  	github.com/x-sushant-x/miniKafka/wal/log	1.424s
+```
+
+---
+
+### BenchmarkReadSequential
+Initial -
+```
+goos: darwin
+goarch: arm64
+pkg: github.com/x-sushant-x/miniKafka/wal/log
+cpu: Apple M1
+BenchmarkReadSequential-8   	  270000	      4002 ns/op	    1092 B/op	       3 allocs/op
+PASS
+ok  	github.com/x-sushant-x/miniKafka/wal/log	2.942s
+```
+
+After optimization - 
+
+```
+goos: darwin
+goarch: arm64
+pkg: github.com/x-sushant-x/miniKafka/wal/log
+cpu: Apple M1
+BenchmarkReadSequential-8   	  542662	      1896 ns/op	    1112 B/op	       3 allocs/op
+PASS
+ok  	github.com/x-sushant-x/miniKafka/wal/log	2.585s
 ```

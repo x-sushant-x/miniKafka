@@ -256,3 +256,55 @@ func BenchmarkAppend(b *testing.B) {
 	fmt.Printf("Throughput      : %.2f msgs/sec\n", msgPerSec)
 	fmt.Println()
 }
+
+func BenchmarkReadSequential(b *testing.B) {
+	tmp, err := os.CreateTemp("", "wal-read.store")
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer os.Remove(tmp.Name())
+
+	store, err := newLogStore(tmp)
+	if err != nil {
+		b.Fatal(err)
+	}
+	defer store.Close()
+
+	const numRecords = 100000
+
+	positions := make([]uint64, numRecords)
+
+	payload := make([]byte, 1024) // 1KB message
+
+	for i := 0; i < numRecords; i++ {
+		_, pos, err := store.Append(&models.Record{
+			Value:     payload,
+			Timestamp: uint64(i),
+			Offset:    uint64(i),
+		})
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		positions[i] = pos
+	}
+
+	if err := store.buf.Flush(); err != nil {
+		b.Fatal(err)
+	}
+
+	idx := 0
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_, err := store.Read(positions[idx])
+		if err != nil {
+			b.Fatal(err)
+		}
+
+		idx++
+		if idx == len(positions) {
+			idx = 0
+		}
+	}
+}

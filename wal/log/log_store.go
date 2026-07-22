@@ -158,52 +158,64 @@ func (store *logStore) Append(record *models.Record) (totalBytesWritten int, pos
  * 6. Compare if generated checksum and stored checksum is equal or not.
  */
 func (store *logStore) Read(posToRead uint64) (*models.Record, error) {
-	store.mu.Lock()
-	defer store.mu.Unlock()
+	store.mu.RLock()
+	defer store.mu.RUnlock()
 
 	if err := store.buf.Flush(); err != nil {
 		return nil, err
 	}
 
-	lenBuf := make([]byte, lenWidth)
-	checksumBuf := make([]byte, checksumWidth)
-	timestampBuf := make([]byte, timestampWidth)
-	offsetBuf := make([]byte, offsetWidth)
+	// lenBuf := make([]byte, lenWidth)
+	// checksumBuf := make([]byte, checksumWidth)
+	// timestampBuf := make([]byte, timestampWidth)
+	// offsetBuf := make([]byte, offsetWidth)
 
+	header := make([]byte, 24)
 	startPos := int64(posToRead)
 
-	_, err := store.f.ReadAt(lenBuf, startPos)
+	// _, err := store.f.ReadAt(lenBuf, startPos)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// _, err = store.f.ReadAt(checksumBuf, startPos+lenWidth)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// expectedChecksum := enc.Uint32(checksumBuf)
+
+	// _, err = store.f.ReadAt(timestampBuf, startPos+lenWidth+checksumWidth)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// _, err = store.f.ReadAt(offsetBuf, startPos+lenWidth+checksumWidth+timestampWidth)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	_, err := store.f.ReadAt(header[:], startPos)
 	if err != nil {
 		return nil, err
 	}
 
-	_, err = store.f.ReadAt(checksumBuf, startPos+lenWidth)
-	if err != nil {
-		return nil, err
-	}
+	// dataLen := enc.Uint32(lenBuf)
 
-	expectedChecksum := enc.Uint32(checksumBuf)
+	dataLen := enc.Uint32(header[0:4])
+	expectedChecksum := enc.Uint32(header[4:8])
+	timestamp := enc.Uint64(header[8:16])
+	offset := enc.Uint64(header[16:24])
 
-	_, err = store.f.ReadAt(timestampBuf, startPos+lenWidth+checksumWidth)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = store.f.ReadAt(offsetBuf, startPos+lenWidth+checksumWidth+timestampWidth)
-	if err != nil {
-		return nil, err
-	}
-
-	dataLen := enc.Uint32(lenBuf)
 	data := make([]byte, dataLen)
 
-	_, err = store.f.ReadAt(data, startPos+lenWidth+checksumWidth+timestampWidth+offsetWidth)
+	_, err = store.f.ReadAt(data, startPos+24)
 	if err != nil {
 		return nil, err
 	}
 
 	crc := crc32.NewIEEE()
-	crc.Write(lenBuf)
+	crc.Write(header[0:4])
 	crc.Write(data)
 
 	actualChecksum := crc.Sum32()
@@ -214,8 +226,8 @@ func (store *logStore) Read(posToRead uint64) (*models.Record, error) {
 
 	return &models.Record{
 		Value:     data,
-		Timestamp: enc.Uint64(timestampBuf),
-		Offset:    enc.Uint64(offsetBuf),
+		Timestamp: timestamp,
+		Offset:    offset,
 	}, err
 }
 
