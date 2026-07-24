@@ -29,15 +29,15 @@ A Kafka-inspired message broker written in Go that implements the core building 
 
 - [x] Log Retention
 
-- [ ] Zero Copy Reads
-
-- [ ] Time-Based Indexes
-
 - [ ] Raft Consensus
 
 - [ ] Leader / Follower Replication
 
 - [ ] Replication
+
+May consider these:
+- [ ] Zero Copy Reads
+- [ ] Memory Mapping based storage
 
 ---
 
