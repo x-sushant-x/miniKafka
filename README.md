@@ -1,6 +1,6 @@
 # miniKafka
 
-A Kafka-inspired message broker written in Go that implements the core building blocks of a distributed log system, including:
+A Kafka-inspired message broker written in Go that implements the core building blocks of a event streaming / log system, including:
 
 
 ### Features
