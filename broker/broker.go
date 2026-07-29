@@ -1,5 +1,3 @@
-// TODO - Broker TCP API can be improved.
-
 package broker
 
 import (
@@ -16,7 +14,7 @@ import (
 	"github.com/x-sushant-x/miniKafka/models"
 	"github.com/x-sushant-x/miniKafka/wal/log"
 
-	logger "log"
+	zerolog "github.com/rs/zerolog/log"
 )
 
 type Broker struct {
@@ -48,7 +46,7 @@ func New(ctx context.Context, port string) (*Broker, error) {
 	}
 
 	if len(entries) > 0 {
-		logger.Println("Loading existing topics")
+		zerolog.Info().Msg("Loading existing topics")
 	}
 
 	for _, entry := range entries {
@@ -70,7 +68,7 @@ func New(ctx context.Context, port string) (*Broker, error) {
 		}
 
 		broker.topics.Store(topicName, existingTopic)
-		logger.Printf("Loaded Topic: %s with partitions: %d", topicName, len(partitions))
+		zerolog.Info().Str("name", topicName).Int("partitions", len(partitions)).Msg("Loaded topic")
 	}
 
 	server, err := NewTCPServer(port)
@@ -83,7 +81,7 @@ func New(ctx context.Context, port string) (*Broker, error) {
 }
 
 func (b *Broker) Start() error {
-	logger.Println("Starting TCP Server on port:", b.port)
+	zerolog.Info().Str("port", b.port).Msg("Starting TCP Server.")
 	go b.startDestroyer()
 	return b.server.StartServer(b.handleRequest)
 }
@@ -132,7 +130,7 @@ func (b *Broker) Shutdown() {
 		topic := value.(*log.Topic)
 
 		if err := topic.Close(); err != nil {
-			logger.Println("error while closing topic:", topic.Name)
+			zerolog.Info().Str("name", topic.Name).Msg("error while closing topic")
 		}
 
 		return true
@@ -250,7 +248,7 @@ func (b *Broker) startDestroyer() {
 }
 
 func (b *Broker) checkForExpiredSegments() {
-	logger.Println("Deleting expired segments")
+	zerolog.Info().Msg("Deleting expired segments")
 
 	b.topics.Range(func(key, value any) bool {
 		topic := value.(*log.Topic)

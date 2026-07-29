@@ -2,17 +2,26 @@ package main
 
 import (
 	"context"
-	"log"
+
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/x-sushant-x/miniKafka/broker"
 	"github.com/x-sushant-x/miniKafka/config"
 )
 
+func init() {
+	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	zerolog.SetGlobalLevel(zerolog.DebugLevel)
+}
+
 func main() {
-	log.Println("Starting miniKafka broker")
+	log.Info().Msg("Starting miniKafka broker")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -35,10 +44,10 @@ func main() {
 	signal.Notify(shutdownChan, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-shutdownChan
-	log.Println("Received graceful shutdown signal:", sig.String())
+	log.Info().Str("signal", sig.String()).Msg("Received graceful shutdown:")
 	cancel()
 	b.Shutdown()
-	log.Println("Graceful shutdown completed")
+	log.Info().Msg("Graceful shutdown completed")
 }
 
 func startBroker(b *broker.Broker) {
