@@ -18,7 +18,7 @@ type Configuration struct {
 type Broker struct {
 	ID   string `json:"id"`
 	Host string `json:"host"`
-	Port int    `json:"port"`
+	Port string `json:"port"`
 }
 
 type ClusterNodesData struct {
@@ -41,7 +41,7 @@ func LoadConfig() error {
 }
 
 func LoadClusterConfig() error {
-	data, err := os.ReadFile("cluster_config.json")
+	data, err := os.ReadFile("cluster_nodes.json")
 	if err != nil {
 		return err
 	}

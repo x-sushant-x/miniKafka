@@ -5,7 +5,6 @@ import (
 	"log"
 	"os"
 	"os/signal"
-	"strconv"
 	"syscall"
 
 	"github.com/x-sushant-x/miniKafka/broker"
@@ -25,9 +24,7 @@ func main() {
 		panic("unable to load cluster config:" + err.Error())
 	}
 
-	brokerPort := strconv.Itoa(config.Config.Broker.Port)
-
-	b, err := broker.New(ctx, brokerPort)
+	b, err := broker.New(ctx, config.Config.Broker.Port)
 	if err != nil {
 		panic("unable to initialize broker " + err.Error())
 	}
