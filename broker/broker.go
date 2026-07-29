@@ -20,8 +20,10 @@ import (
 )
 
 type Broker struct {
-	topics sync.Map
+	id     string
+	host   string
 	port   string
+	topics sync.Map
 	ctx    context.Context
 	server *TCPServer
 }

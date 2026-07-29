@@ -1,6 +1,10 @@
 {
+    "broker" : {
+        "id" : "1",
+        "host" : "127.0.0.1",
+        "port" : "5555"
+    },
     "topics_storage_dir" : "/Users/sushantdhiman/GoLang/miniKafka/.logs",
-    "broker_port" : "5555",
     "retention_time_days" : 45,
     "cleanup_check_interval_seconds" : 60
 }
