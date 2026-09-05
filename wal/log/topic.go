@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/x-sushant-x/miniKafka/models"
+	"github.com/x-sushant-x/miniKafka/raft"
 	"github.com/x-sushant-x/miniKafka/wal/utils"
 )
 
@@ -13,7 +14,7 @@ type Topic struct {
 	totalPartitions uint32
 }
 
-func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) {
+func NewTopic(ctx context.Context, name string, partitions int, raftServer *raft.Server) (*Topic, error) {
 	if name == "" {
 		return nil, ErrEmptyTopicName
 	}
@@ -28,7 +29,7 @@ func NewTopic(ctx context.Context, name string, partitions int) (*Topic, error) 
 	}
 
 	for partition := range partitions {
-		newPar, err := newPartition(ctx, topic.Name, partition)
+		newPar, err := newPartition(ctx, topic.Name, partition, raftServer)
 		if err != nil {
 			return nil, err
 		}

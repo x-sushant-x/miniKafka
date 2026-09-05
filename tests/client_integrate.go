@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	c, err := client.NewTCPClient("127.0.0.1", "5555")
+	c, err := client.NewTCPClient("127.0.0.1", "5557")
 	if err != nil {
 		panic(err)
 	}
@@ -17,10 +17,10 @@ func main() {
 	// time.Sleep(time.Second * 5)
 	for i := range 10 {
 		var buf bytes.Buffer
-		buf.WriteString("User created: #")
+		buf.WriteString("#1234531")
 		fmt.Fprintf(&buf, "%d", i)
 
-		err = c.Produce("notifications", buf.Bytes(), buf.String())
+		err = c.Produce("orders", buf.Bytes(), buf.String())
 		if err != nil {
 			panic(err)
 		}

@@ -9,6 +9,7 @@ message RequestVoteReq {
     string candidateID = 2;
     int64 lastLogIndex = 3;
     int64 lastLogTerm = 4;
+    string group_id = 5;
 }
 
 message RequestVoteResp {
@@ -28,6 +29,7 @@ message AppendEntriesRequest {
     int64 prevLogTerm = 4;
     repeated LogEntry entries = 5;
     int64 leaderCommit = 6;
+    string group_id = 7;
 }
 
 message AppendEntriesResponse {
@@ -37,6 +39,7 @@ message AppendEntriesResponse {
 
 message SubmitRequest {
     bytes Command = 1;
+    string group_id = 2;
 }
 
 message SubmitResponse {

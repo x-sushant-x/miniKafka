@@ -180,7 +180,7 @@ func (w *wal) flushRegular(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			zerolog.Info().Msgf("Flushing Data: %s\n", w.dir)
+			zerolog.Info().Msgf("Flushing Data: %s", w.dir)
 			if err := w.flush(); err != nil {
 				zerolog.Err(err).Msg("wal flush failed")
 			}

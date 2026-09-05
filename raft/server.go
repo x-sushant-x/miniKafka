@@ -2,6 +2,7 @@ package raft
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net"
 	"sync"
@@ -16,14 +17,13 @@ import (
 type Server struct {
 	pb.UnimplementedRaftServiceServer
 
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	id       string
 	host     string
 	port     string
 	cluster  map[string]string
 	peerRPCs map[string]pb.RaftServiceClient
-
-	raft *Raft
+	rafts    map[string]*Raft
 }
 
 func NewServer(id, host, port string, cluster map[string]string) *Server {
@@ -33,19 +33,50 @@ func NewServer(id, host, port string, cluster map[string]string) *Server {
 		port:     port,
 		cluster:  cluster,
 		peerRPCs: make(map[string]pb.RaftServiceClient),
+		rafts:    make(map[string]*Raft),
 	}
 }
 
+func (s *Server) AddRaft(groupID string, raft *Raft) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.rafts[groupID] = raft
+}
+
 func (s *Server) RequestVote(ctx context.Context, req *pb.RequestVoteReq) (*pb.RequestVoteResp, error) {
-	return s.raft.HandleRequestVote(req)
+	s.mu.RLock()
+	raft := s.rafts[req.GroupId]
+	s.mu.RUnlock()
+
+	if raft == nil {
+		return nil, errors.New("raft group not found for: " + req.GroupId)
+	}
+
+	return raft.HandleRequestVote(req)
 }
 
 func (s *Server) AppendEntries(ctx context.Context, req *pb.AppendEntriesRequest) (*pb.AppendEntriesResponse, error) {
-	return s.raft.HandleAppendEntries(req)
+	s.mu.RLock()
+	raft := s.rafts[req.GroupId]
+	s.mu.RUnlock()
+
+	if raft == nil {
+		return nil, errors.New("raft group not found for: " + req.GroupId)
+	}
+
+	return raft.HandleAppendEntries(req)
 }
 
 func (s *Server) SubmitCommand(ctx context.Context, req *pb.SubmitRequest) (*pb.SubmitResponse, error) {
-	resp := s.raft.Submit(req.Command)
+	s.mu.RLock()
+	raft := s.rafts[req.GroupId]
+	s.mu.RUnlock()
+
+	if raft == nil {
+		return nil, errors.New("raft group not found for: " + req.GroupId)
+	}
+
+	resp := raft.Submit(req.Command)
 	return &pb.SubmitResponse{
 		IsSuccess: resp,
 	}, nil

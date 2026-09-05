@@ -27,6 +27,7 @@ type RequestVoteReq struct {
 	CandidateID   string                 `protobuf:"bytes,2,opt,name=candidateID,proto3" json:"candidateID,omitempty"`
 	LastLogIndex  int64                  `protobuf:"varint,3,opt,name=lastLogIndex,proto3" json:"lastLogIndex,omitempty"`
 	LastLogTerm   int64                  `protobuf:"varint,4,opt,name=lastLogTerm,proto3" json:"lastLogTerm,omitempty"`
+	GroupId       string                 `protobuf:"bytes,5,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -87,6 +88,13 @@ func (x *RequestVoteReq) GetLastLogTerm() int64 {
 		return x.LastLogTerm
 	}
 	return 0
+}
+
+func (x *RequestVoteReq) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
 }
 
 type RequestVoteResp struct {
@@ -201,6 +209,7 @@ type AppendEntriesRequest struct {
 	PrevLogTerm   int64                  `protobuf:"varint,4,opt,name=prevLogTerm,proto3" json:"prevLogTerm,omitempty"`
 	Entries       []*LogEntry            `protobuf:"bytes,5,rep,name=entries,proto3" json:"entries,omitempty"`
 	LeaderCommit  int64                  `protobuf:"varint,6,opt,name=leaderCommit,proto3" json:"leaderCommit,omitempty"`
+	GroupId       string                 `protobuf:"bytes,7,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -277,6 +286,13 @@ func (x *AppendEntriesRequest) GetLeaderCommit() int64 {
 	return 0
 }
 
+func (x *AppendEntriesRequest) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
+}
+
 type AppendEntriesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
@@ -332,6 +348,7 @@ func (x *AppendEntriesResponse) GetTerm() int64 {
 type SubmitRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Command       []byte                 `protobuf:"bytes,1,opt,name=Command,proto3" json:"Command,omitempty"`
+	GroupId       string                 `protobuf:"bytes,2,opt,name=group_id,json=groupId,proto3" json:"group_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -371,6 +388,13 @@ func (x *SubmitRequest) GetCommand() []byte {
 		return x.Command
 	}
 	return nil
+}
+
+func (x *SubmitRequest) GetGroupId() string {
+	if x != nil {
+		return x.GroupId
+	}
+	return ""
 }
 
 type SubmitResponse struct {
@@ -421,30 +445,33 @@ var File_proto_raft_proto protoreflect.FileDescriptor
 
 const file_proto_raft_proto_rawDesc = "" +
 	"\n" +
-	"\x10proto/raft.proto\x12\x04raft\"\x8c\x01\n" +
+	"\x10proto/raft.proto\x12\x04raft\"\xa7\x01\n" +
 	"\x0eRequestVoteReq\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x03R\x04term\x12 \n" +
 	"\vcandidateID\x18\x02 \x01(\tR\vcandidateID\x12\"\n" +
 	"\flastLogIndex\x18\x03 \x01(\x03R\flastLogIndex\x12 \n" +
-	"\vlastLogTerm\x18\x04 \x01(\x03R\vlastLogTerm\"G\n" +
+	"\vlastLogTerm\x18\x04 \x01(\x03R\vlastLogTerm\x12\x19\n" +
+	"\bgroup_id\x18\x05 \x01(\tR\agroupId\"G\n" +
 	"\x0fRequestVoteResp\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x03R\x04term\x12 \n" +
 	"\vvoteGranted\x18\x02 \x01(\bR\vvoteGranted\"8\n" +
 	"\bLogEntry\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x03R\x04term\x12\x18\n" +
-	"\acommand\x18\x02 \x01(\fR\acommand\"\xda\x01\n" +
+	"\acommand\x18\x02 \x01(\fR\acommand\"\xf5\x01\n" +
 	"\x14AppendEntriesRequest\x12\x12\n" +
 	"\x04term\x18\x01 \x01(\x03R\x04term\x12\x1a\n" +
 	"\bleaderId\x18\x02 \x01(\tR\bleaderId\x12\"\n" +
 	"\fprevLogIndex\x18\x03 \x01(\x03R\fprevLogIndex\x12 \n" +
 	"\vprevLogTerm\x18\x04 \x01(\x03R\vprevLogTerm\x12(\n" +
 	"\aentries\x18\x05 \x03(\v2\x0e.raft.LogEntryR\aentries\x12\"\n" +
-	"\fleaderCommit\x18\x06 \x01(\x03R\fleaderCommit\"E\n" +
+	"\fleaderCommit\x18\x06 \x01(\x03R\fleaderCommit\x12\x19\n" +
+	"\bgroup_id\x18\a \x01(\tR\agroupId\"E\n" +
 	"\x15AppendEntriesResponse\x12\x18\n" +
 	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x12\n" +
-	"\x04term\x18\x02 \x01(\x03R\x04term\")\n" +
+	"\x04term\x18\x02 \x01(\x03R\x04term\"D\n" +
 	"\rSubmitRequest\x12\x18\n" +
-	"\aCommand\x18\x01 \x01(\fR\aCommand\".\n" +
+	"\aCommand\x18\x01 \x01(\fR\aCommand\x12\x19\n" +
+	"\bgroup_id\x18\x02 \x01(\tR\agroupId\".\n" +
 	"\x0eSubmitResponse\x12\x1c\n" +
 	"\tisSuccess\x18\x01 \x01(\bR\tisSuccess2\xcf\x01\n" +
 	"\vRaftService\x12:\n" +

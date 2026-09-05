@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	zeroLog "github.com/rs/zerolog/log"
 	"github.com/x-sushant-x/miniKafka/raft/proto/pb"
 )
 
@@ -37,9 +38,11 @@ type Raft struct {
 
 	// Channel on which commands will be sent to application logic.
 	applyChan chan ApplyMessage
+
+	groupID string // topic_name-parition_number
 }
 
-func NewRaft(applyChan chan ApplyMessage) *Raft {
+func NewRaft(server *Server, applyChan chan ApplyMessage, groupID string) *Raft {
 	r := &Raft{
 		state:         Follower,
 		lastEventTime: time.Now(),
@@ -49,6 +52,8 @@ func NewRaft(applyChan chan ApplyMessage) *Raft {
 		nextIndex:     make(map[string]int),
 		matchIndex:    make(map[string]int),
 		applyChan:     applyChan,
+		server:        server,
+		groupID:       groupID,
 	}
 
 	// Adding dummy entry to log to make things simple.
@@ -62,11 +67,12 @@ func generateTimeout() time.Duration {
 	return time.Duration(raftRandomTime * int(time.Millisecond))
 }
 
-func (r *Raft) startElectionLoop() {
+func (r *Raft) StartElectionLoop() {
 	ticker := time.NewTicker(time.Millisecond * 10)
 	defer ticker.Stop()
 
 	timeout := generateTimeout()
+	zeroLog.Info().Int64("timeout", timeout.Milliseconds()).Msg("Starting Election Loop")
 
 	for {
 		<-ticker.C
@@ -80,7 +86,7 @@ func (r *Raft) startElectionLoop() {
 			continue
 		}
 
-		if state != Candidate && r.state != Follower {
+		if state != Candidate && state != Follower {
 			continue
 		}
 
@@ -113,6 +119,7 @@ func (r *Raft) startElection() {
 				CandidateID:  r.server.id,
 				LastLogIndex: lastLogIndex,
 				LastLogTerm:  lastLogTerm,
+				GroupId:      r.groupID,
 			}
 
 			resp, err := peerRPC.RequestVote(context.Background(), req)
@@ -345,6 +352,7 @@ func (r *Raft) replicateToPeer(peerID string, peerRPC pb.RaftServiceClient, save
 		PrevLogTerm:  prevLogTerm,
 		Entries:      pbEntries,
 		LeaderCommit: int64(leaderCommit),
+		GroupId:      r.groupID,
 	}
 
 	// As of now we will hit clients RPCs synchronously to keep things simple.
@@ -398,7 +406,7 @@ func (r *Raft) advanceLeaderCommit() {
 	}
 }
 
-func (r *Raft) applyLoop() {
+func (r *Raft) ApplyLoop() {
 	for {
 		r.mu.Lock()
 
@@ -423,6 +431,9 @@ func (r *Raft) applyLoop() {
 }
 
 func (r *Raft) Submit(command []byte) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.state != Leader {
 		return false
 	}

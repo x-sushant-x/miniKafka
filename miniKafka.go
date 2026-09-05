@@ -58,7 +58,7 @@ func main() {
 	time.Sleep(time.Millisecond * 500)
 	raftServer.ConnectToAllPeers()
 
-	b, err := broker.New(ctx, config.Config.Broker.Port)
+	b, err := broker.New(ctx, config.Config.Broker.Port, raftServer)
 	if err != nil {
 		panic("unable to initialize broker " + err.Error())
 	}
