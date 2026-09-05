@@ -1,7 +1,8 @@
 # miniKafka
 
-A Kafka-inspired message broker written in Go that implements the core building blocks of a event streaming / log system, including:
+miniKafka is a Kafka-inspired distributed event streaming system that I'm building from scratch in Go. It implements core concepts such as brokers, topics, partitions, WAL-based storage engine, and Raft consensus for fault-tolerant data replication. I'm building this project because I finds it interesting and I always wanted to build a distributed systems project.
 
+The `main` branch contains the implementation of the single-node Kafka-like storage system. For distributed systems features, I use a separate [`distributed`](https://github.com/x-sushant-x/miniKafka/tree/distributed) branch.
 
 ### Features
 
@@ -29,11 +30,11 @@ A Kafka-inspired message broker written in Go that implements the core building 
 
 - [x] Log Retention
 
-- [ ] Raft Consensus
+- [ ] Raft Consensus -> [In Progress](https://github.com/x-sushant-x/miniKafka/tree/distributed)
 
-- [ ] Leader / Follower Replication
+- [ ] Leader / Follower Replication -> [In Progress](https://github.com/x-sushant-x/miniKafka/tree/distributed)
 
-- [ ] Replication
+- [ ] Replication -> [In Progress](https://github.com/x-sushant-x/miniKafka/tree/distributed)
 
 May consider these:
 - [ ] Zero Copy Reads
