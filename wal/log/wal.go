@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -9,7 +10,6 @@ import (
 	"sync"
 	"time"
 
-	zerolog "github.com/rs/zerolog/log"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
@@ -180,9 +180,9 @@ func (w *wal) flushRegular(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			zerolog.Info().Msgf("Flushing Data: %s\n", w.dir)
+			log.Printf("Flushing Data: %s\n", w.dir)
 			if err := w.flush(); err != nil {
-				zerolog.Err(err).Msg("wal flush failed")
+				log.Printf("wal flush failed: %v", err)
 			}
 		case <-ctx.Done():
 			return

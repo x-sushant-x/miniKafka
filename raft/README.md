@@ -1,1 +1,0 @@
-This implementation of Raft is taken from: [https://github.com/x-sushant-x/raft](https://github.com/x-sushant-x/raft)

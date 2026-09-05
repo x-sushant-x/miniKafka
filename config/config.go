@@ -26,13 +26,13 @@ type ClusterNodesData struct {
 }
 
 type Node struct {
-	ID       string `json:"id"`
-	Host     string `json:"host"`
-	RaftPort string `json:"raft_port"`
+	ID   string `json:"id"`
+	Host string `json:"host"`
+	Port int    `json:"port"`
 }
 
-func LoadConfig(configFile string) error {
-	data, err := os.ReadFile(configFile)
+func LoadConfig() error {
+	data, err := os.ReadFile("config.json")
 	if err != nil {
 		return err
 	}
@@ -41,7 +41,7 @@ func LoadConfig(configFile string) error {
 }
 
 func LoadClusterConfig() error {
-	data, err := os.ReadFile("cluster.json")
+	data, err := os.ReadFile("cluster_nodes.json")
 	if err != nil {
 		return err
 	}
