@@ -27,10 +27,9 @@ type Raft struct {
 	votedFor      string
 	term          int64
 	server        *Server
-
-	log         []LogEntry
-	commitIndex int
-	lastApplied int
+	log           *RaftLog
+	commitIndex   int
+	lastApplied   int
 
 	// Leader Only
 	nextIndex  map[string]int
@@ -42,13 +41,12 @@ type Raft struct {
 	groupID string // topic_name-parition_number
 }
 
-func NewRaft(server *Server, applyChan chan ApplyMessage, groupID string) *Raft {
+func NewRaft(server *Server, applyChan chan ApplyMessage, groupID, raftStorageDir string) *Raft {
 	r := &Raft{
 		state:         Follower,
 		lastEventTime: time.Now(),
 		votedFor:      "-1",
 		term:          0,
-		log:           make([]LogEntry, 0),
 		nextIndex:     make(map[string]int),
 		matchIndex:    make(map[string]int),
 		applyChan:     applyChan,
@@ -56,8 +54,13 @@ func NewRaft(server *Server, applyChan chan ApplyMessage, groupID string) *Raft 
 		groupID:       groupID,
 	}
 
-	// Adding dummy entry to log to make things simple.
-	r.log = append(r.log, LogEntry{})
+	raftLog, err := openRaftLog(raftStorageDir)
+	if err != nil {
+		zeroLog.Fatal().Err(err).Msg("unable to open raftLog")
+	}
+
+	r.log = raftLog
+
 	return r
 }
 
@@ -106,8 +109,8 @@ func (r *Raft) startElection() {
 	savedTerm := r.term
 	totalVotesReceived := 1
 	r.lastEventTime = time.Now()
-	lastLogIndex := int64(len(r.log) - 1)
-	lastLogTerm := r.log[lastLogIndex].Term
+	lastLogIndex := r.log.LastIndex()
+	lastLogTerm := r.log.LastTerm()
 	r.mu.Unlock()
 
 	for peerID, peerRPC := range r.server.peerRPCs {
@@ -174,8 +177,8 @@ func (r *Raft) HandleRequestVote(req *pb.RequestVoteReq) (*pb.RequestVoteResp, e
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
-	lastLogIndex := int64(len(r.log) - 1)
-	lastLogTerm := r.log[lastLogIndex].Term
+	lastLogIndex := r.log.LastIndex()
+	lastLogTerm := r.log.LastTerm()
 
 	resp := &pb.RequestVoteResp{}
 
@@ -226,7 +229,7 @@ func (r *Raft) HandleAppendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntr
 		r.becameFollower(req.Term)
 	}
 
-	lastLogIndex := int64(len(r.log) - 1)
+	lastLogIndex := r.log.LastIndex()
 
 	// Leader is expecting follower to have PrevLogIndex but it does not even have that. So it will reply false. Leader will then
 	// decrement index by 1 and resend the entry.
@@ -235,40 +238,59 @@ func (r *Raft) HandleAppendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntr
 		return resp, nil
 	}
 
-	if req.PrevLogTerm != r.log[req.PrevLogIndex].Term {
+	prevEntry, err := r.log.Get(int(req.PrevLogIndex))
+	if err != nil {
+		return resp, err
+	}
+
+	if req.PrevLogTerm != prevEntry.Term {
 		return resp, nil
 	}
 
 	// Appending new entries
-	for i, entry := range req.Entries {
+	for i, incoming := range req.Entries {
 		index := req.PrevLogIndex + 1 + int64(i)
 
 		// There are existing entries that are conflicting with leader new entries. We need to discard them.
-		if index <= int64(len(r.log)-1) {
-			if r.log[index].Term != entry.Term {
-				r.log = r.log[:index]
-
-				for j := i; j < len(req.Entries); j++ {
-					r.log = append(r.log, LogEntry{
-						Term:    req.Entries[j].Term,
-						Command: req.Entries[j].Command,
-					})
-				}
-
-				break
+		if index <= r.log.LastIndex() {
+			existing, err := r.log.Get(int(index))
+			if err != nil {
+				return resp, err
 			}
 
+			if existing.Term != incoming.Term {
+				if err := r.log.TruncateFrom(int(index)); err != nil {
+					return resp, err
+				}
+
+				for j := i; j < len(req.Entries); j++ {
+					entry := LogEntry{
+						Term:    req.Entries[j].Term,
+						Command: req.Entries[j].Command,
+					}
+
+					if _, err := r.log.Append(entry); err != nil {
+						return resp, err
+					}
+				}
+				break
+			}
 			continue
 		}
 
-		r.log = append(r.log, LogEntry{
-			Term:    entry.Term,
-			Command: entry.Command,
-		})
+		entry := LogEntry{
+			Term:    incoming.Term,
+			Command: incoming.Command,
+		}
+
+		if _, err := r.log.Append(entry); err != nil {
+			return resp, err
+		}
 	}
 
 	if req.LeaderCommit > int64(r.commitIndex) {
-		r.commitIndex = min(int(req.LeaderCommit), len(r.log)-1)
+		lastIndex := r.log.LastIndex()
+		r.commitIndex = min(int(req.LeaderCommit), int(lastIndex))
 	}
 
 	resp.Term = r.term
@@ -288,7 +310,7 @@ func (r *Raft) becameLeader() {
 	r.state = Leader
 
 	for peerID := range r.server.peerRPCs {
-		r.nextIndex[peerID] = len(r.log)
+		r.nextIndex[peerID] = int(r.log.LastIndex() + 1)
 		r.matchIndex[peerID] = 0
 	}
 
@@ -328,15 +350,40 @@ func (r *Raft) sendHeartBeats() {
 func (r *Raft) replicateToPeer(peerID string, peerRPC pb.RaftServiceClient, savedTerm int64, leaderID string) {
 	r.mu.Lock()
 
+	if r.state != Leader {
+		r.mu.Unlock()
+		return
+	}
+
 	next := r.nextIndex[peerID]
 	prevLogIndex := next - 1
-	prevLogTerm := r.log[prevLogIndex].Term
-	entries := make([]LogEntry, len(r.log[next:]))
-	copy(entries, r.log[next:])
-	pbEntries := []*pb.LogEntry{}
+
+	prevEntry, err := r.log.Get(prevLogIndex)
+	if err != nil {
+		r.mu.Unlock()
+		zeroLog.Err(err).Msgf("failed to get prev log entry for peer %s", peerID)
+		return
+	}
+
+	lastIndex := int(r.log.LastIndex())
+	prevLogTerm := prevEntry.Term
+
+	var entries []LogEntry
+
+	if next <= lastIndex {
+		entries, err = r.log.GetRange(next, lastIndex+1)
+		if err != nil {
+			r.mu.Unlock()
+			zeroLog.Err(err).Msgf("failed to read log range for peer %s", peerID)
+			return
+		}
+	}
+
 	leaderCommit := r.commitIndex
 
 	r.mu.Unlock()
+
+	pbEntries := make([]*pb.LogEntry, 0, len(entries))
 
 	for _, entry := range entries {
 		pbEntries = append(pbEntries, &pb.LogEntry{
@@ -389,8 +436,9 @@ func (r *Raft) replicateToPeer(peerID string, peerRPC pb.RaftServiceClient, save
 
 func (r *Raft) advanceLeaderCommit() {
 	clusterSize := len(r.server.peerRPCs) + 1
+	lastIndex := int(r.log.LastIndex())
 
-	for N := len(r.log) - 1; N > r.commitIndex; N-- {
+	for N := lastIndex; N > r.commitIndex; N-- {
 		replicatedCount := 1
 
 		for peerID := range r.server.peerRPCs {
@@ -399,7 +447,19 @@ func (r *Raft) advanceLeaderCommit() {
 			}
 		}
 
-		if replicatedCount > clusterSize/2 && r.log[N].Term == r.term {
+		if replicatedCount <= clusterSize/2 {
+			continue
+		}
+
+		entry, err := r.log.Get(N)
+		if err != nil {
+			log.Printf("failed to read log entry %d: %v", N, err)
+			continue
+		}
+
+		// Raft rule: only commit entries from current term
+		// using the normal majority mechanism.
+		if entry.Term == r.term {
 			r.commitIndex = N
 			break
 		}
@@ -413,18 +473,21 @@ func (r *Raft) ApplyLoop() {
 		if r.lastApplied < r.commitIndex {
 			r.lastApplied++
 			index := r.lastApplied
-			command := r.log[index].Command
+			entry, err := r.log.Get(index)
+			if err != nil {
+				r.mu.Unlock()
+				zeroLog.Err(err).Msgf("failed to read committed log entry %d", index)
+				continue
+			}
 
 			r.mu.Unlock()
 
 			r.applyChan <- ApplyMessage{
 				Index:   int64(index),
-				Command: command,
+				Command: entry.Command,
 			}
-
 			continue
 		}
-
 		r.mu.Unlock()
 		time.Sleep(10 * time.Millisecond)
 	}
@@ -443,7 +506,11 @@ func (r *Raft) Submit(command []byte) bool {
 		Command: command,
 	}
 
-	r.log = append(r.log, entry)
+	_, err := r.log.Append(entry)
+	if err != nil {
+		log.Printf("failed to append raft entry: %v", err)
+		return false
+	}
 
 	return true
 }

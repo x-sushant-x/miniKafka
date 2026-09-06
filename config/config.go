@@ -11,6 +11,7 @@ var ClusterNodes ClusterNodesData
 type Configuration struct {
 	Broker                      Broker `json:"broker"`
 	TopicsStorageDir            string `json:"topics_storage_dir"`
+	RaftStorageDir              string `json:"raft_storage_dir"`
 	RetentionTimeDays           int    `json:"retention_time_days"`
 	CleanupCheckIntervalSeconds int    `json:"cleanup_check_interval_seconds"`
 }

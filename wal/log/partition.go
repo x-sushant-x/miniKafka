@@ -42,7 +42,8 @@ func newPartition(ctx context.Context, topicName string, number int, raftServer 
 
 	groupID := fmt.Sprintf("%s-%d", topicName, number)
 	applyChan := make(chan raft.ApplyMessage)
-	newRaft := raft.NewRaft(raftServer, applyChan, groupID)
+	raftStorageDir := filepath.Join(config.Config.RaftStorageDir, groupID)
+	newRaft := raft.NewRaft(raftServer, applyChan, groupID, raftStorageDir)
 	raftServer.AddRaft(groupID, newRaft)
 
 	partition := &partition{
@@ -80,6 +81,12 @@ func (p *partition) Read(offset uint64) (*models.Record, error) {
 
 func (p *partition) applyLoop() {
 	for msg := range p.applyChan {
+		// We need to skip 0th Raft Log entry because it is just a dummy entry that is written to make indexing easier.
+		// It is not meant to be replicated.
+		if msg.Index == 0 {
+			continue
+		}
+
 		var record models.Record
 		err := gob.NewDecoder(bytes.NewReader(msg.Command)).Decode(&record)
 		if err != nil {

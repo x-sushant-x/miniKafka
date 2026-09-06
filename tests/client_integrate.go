@@ -13,11 +13,9 @@ func main() {
 		panic(err)
 	}
 
-	// go func() {
-	// time.Sleep(time.Second * 5)
-	for i := range 10 {
+	for i := range 1 {
 		var buf bytes.Buffer
-		buf.WriteString("#1234531")
+		buf.WriteString("#55")
 		fmt.Fprintf(&buf, "%d", i)
 
 		err = c.Produce("orders", buf.Bytes(), buf.String())
@@ -25,11 +23,9 @@ func main() {
 			panic(err)
 		}
 
-		fmt.Printf("Produced: %d\n", i)
 	}
-	// }()
 
-	// data, err := c.Consume("notifications", 0, 0)
+	// data, err := c.Consume("orders", 1, 0)
 	// if err != nil {
 	// 	panic(err)
 	// }

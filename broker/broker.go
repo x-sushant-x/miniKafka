@@ -67,8 +67,11 @@ func New(ctx context.Context, port string, raftServer *raft.Server) (*Broker, er
 
 		existingTopic, err := log.NewTopic(ctx, topicName, len(partitions), raftServer)
 		if err != nil {
+			zerolog.Err(err).Str("name", existingTopic.Name).Msgf("Unable to load existing topic")
 			return nil, err
 		}
+
+		zerolog.Info().Str("name", existingTopic.Name).Msgf("Loaded existing topic")
 
 		broker.topics.Store(topicName, existingTopic)
 		zerolog.Info().Str("name", topicName).Int("partitions", len(partitions)).Msg("Loaded topic")
