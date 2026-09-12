@@ -69,7 +69,7 @@ func NewRaft(server *Server, applyChan chan ApplyMessage, groupID, raftStorageDi
 
 	/* Give an existing leader enough time to send a heartbeat
 	before this restarted node attempts an election. */
-	r.electionDeadline = time.Now().Add(500 * time.Millisecond)
+	r.electionDeadline = time.Now().Add(2000 * time.Millisecond)
 	return r
 }
 
@@ -81,7 +81,7 @@ func generateTimeout() time.Duration {
 
 // Whenever something meaningful happen we will move election deadline forward.
 func (r *Raft) StartElectionLoop() {
-	ticker := time.NewTicker(10 * time.Millisecond)
+	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 
 	r.mu.Lock()
@@ -100,8 +100,7 @@ func (r *Raft) StartElectionLoop() {
 			continue
 		}
 
-		if (r.state == Follower || r.state == Candidate) &&
-			time.Now().After(r.electionDeadline) {
+		if (r.state == Follower || r.state == Candidate) && time.Now().After(r.electionDeadline) {
 
 			r.mu.Unlock()
 

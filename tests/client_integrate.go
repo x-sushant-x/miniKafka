@@ -12,15 +12,14 @@ func main() {
 		panic(err)
 	}
 
-	// for range 1 {
+	// for range 2 {
 	// 	var buf bytes.Buffer
-	// 	buf.WriteString("Omnitrix")
+	// 	buf.WriteString("Asmuth")
 
 	// 	err = c.Produce("orders", buf.Bytes(), buf.String())
 	// 	if err != nil {
 	// 		panic(err)
 	// 	}
-
 	// }
 
 	for offset := range 4 {
