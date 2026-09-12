@@ -7,5 +7,5 @@
     "topics_storage_dir" : "/Users/sushantdhiman/GoLang/miniKafka/.logs/broker2",
     "raft_storage_dir" : "/Users/sushantdhiman/GoLang/miniKafka/.raft/broker2",
     "retention_time_days" : 45,
-    "cleanup_check_interval_seconds" : 60
+    "cleanup_check_interval_seconds" : 84600
 }

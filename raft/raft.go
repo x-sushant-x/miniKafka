@@ -177,6 +177,10 @@ func (r *Raft) startElection() {
 			}
 
 			if resp.Term > savedTerm {
+				zeroLog.Info().
+					Int64("term", resp.Term).
+					Int64("savedTerm", savedTerm).
+					Msg("Becaming follower because received higher term from RequestVote")
 				r.becameFollower(resp.Term)
 				return
 			}
@@ -215,6 +219,10 @@ func (r *Raft) HandleRequestVote(req *pb.RequestVoteReq) (*pb.RequestVoteResp, e
 	}
 
 	if req.Term > r.term {
+		zeroLog.Info().
+			Int64("reqTerm", req.Term).
+			Int64("r.term", r.term).
+			Msg("Becaming follower because someone else sent RequestVote with higher term.")
 		r.becameFollower(req.Term)
 	}
 
@@ -252,6 +260,10 @@ func (r *Raft) HandleAppendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntr
 	}
 
 	if req.Term > r.term {
+		zeroLog.Info().
+			Int64("reqTerm", req.Term).
+			Int64("r.term", r.term).
+			Msg("Becaming follower because got higher term in HandleAppendEntries")
 		r.becameFollower(req.Term)
 	} else if r.state != Follower {
 		// Same term: step down without resetting votedFor.
@@ -381,7 +393,7 @@ func (r *Raft) sendHeartBeats() {
 	r.mu.Unlock()
 
 	for peerID, peerRPC := range r.server.peerRPCs {
-		r.replicateToPeer(peerID, peerRPC, savedTerm, leaderID)
+		go r.replicateToPeer(peerID, peerRPC, savedTerm, leaderID)
 	}
 }
 
@@ -451,6 +463,10 @@ func (r *Raft) replicateToPeer(peerID string, peerRPC pb.RaftServiceClient, save
 		}
 
 		if resp.Term > savedTerm {
+			zeroLog.Info().
+				Int64("reqTerm", req.Term).
+				Int64("r.term", r.term).
+				Msg("Becaming follower because got higher term while sending AppendEntries as heartbeat.")
 			r.becameFollower(resp.Term)
 			r.mu.Unlock()
 			return
@@ -551,4 +567,14 @@ func (r *Raft) Submit(command []byte) bool {
 	}
 
 	return true
+}
+
+func (r *Raft) SetLastApplied(offset uint64) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	r.lastApplied = int(offset)
+	if r.commitIndex < r.lastApplied {
+		r.commitIndex = r.lastApplied
+	}
 }

@@ -180,7 +180,6 @@ func (w *wal) flushRegular(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			zerolog.Info().Msgf("Flushing Data: %s", w.dir)
 			if err := w.flush(); err != nil {
 				zerolog.Err(err).Msg("wal flush failed")
 			}
@@ -209,4 +208,11 @@ func (w *wal) deleteExpiredSegments() error {
 
 	w.segments = remaining
 	return nil
+}
+
+func (w *wal) NextOffset() uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.active.nextOff
 }

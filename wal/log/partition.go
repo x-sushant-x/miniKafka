@@ -44,6 +44,7 @@ func newPartition(ctx context.Context, topicName string, number int, raftServer 
 	applyChan := make(chan raft.ApplyMessage)
 	raftStorageDir := filepath.Join(config.Config.RaftStorageDir, groupID)
 	newRaft := raft.NewRaft(raftServer, applyChan, groupID, raftStorageDir)
+	newRaft.SetLastApplied(wal.NextOffset())
 	raftServer.AddRaft(groupID, newRaft)
 
 	partition := &partition{
