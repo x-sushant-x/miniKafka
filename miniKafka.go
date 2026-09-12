@@ -94,10 +94,23 @@ func startBroker(b *broker.Broker) {
 }
 
 func truncateData(c config.Configuration) {
-	log.Info().Msg("Truncating Data")
+	log.Info().Msg("Truncating Topics Data")
 	filepath.Walk(c.TopicsStorageDir, func(path string, file fs.FileInfo, err error) error {
 		if strings.HasSuffix(file.Name(), "index") ||
 			strings.HasSuffix(file.Name(), "meta") ||
+			strings.HasSuffix(file.Name(), "store") {
+			err := os.Remove(path)
+			if err != nil {
+				log.Fatal().Err(err).Msg("unable to truncate data")
+			}
+		}
+		return err
+	})
+
+	log.Info().Msg("Truncating Raft Data")
+	filepath.Walk(c.RaftStorageDir, func(path string, file fs.FileInfo, err error) error {
+		if strings.HasSuffix(file.Name(), "index") ||
+			strings.HasSuffix(file.Name(), "state") ||
 			strings.HasSuffix(file.Name(), "store") {
 			err := os.Remove(path)
 			if err != nil {
