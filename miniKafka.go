@@ -4,6 +4,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io/fs"
+	"path/filepath"
+	"strings"
 
 	"os"
 	"os/signal"
@@ -26,6 +29,8 @@ func init() {
 
 func main() {
 	brokerId := flag.String("broker_id", "", "Broker ID")
+	truncateFlag := flag.Bool("truncate", false, "Delete all topics data")
+	truncateOnly := flag.Bool("truncate_only", false, "Truncate data and do not start miniKafka")
 	flag.Parse()
 
 	if brokerId == nil || *brokerId == "" {
@@ -40,6 +45,13 @@ func main() {
 
 	if err := config.LoadConfig(configFile); err != nil {
 		panic("unable to load config:" + err.Error())
+	}
+
+	if *truncateOnly {
+		truncateData(config.Config)
+		return
+	} else if *truncateFlag {
+		truncateData(config.Config)
 	}
 
 	if err := config.LoadClusterConfig(); err != nil {
@@ -79,4 +91,19 @@ func startBroker(b *broker.Broker) {
 	if err != nil {
 		panic("unable to start broker")
 	}
+}
+
+func truncateData(c config.Configuration) {
+	log.Info().Msg("Truncating Data")
+	filepath.Walk(c.TopicsStorageDir, func(path string, file fs.FileInfo, err error) error {
+		if strings.HasSuffix(file.Name(), "index") ||
+			strings.HasSuffix(file.Name(), "meta") ||
+			strings.HasSuffix(file.Name(), "store") {
+			err := os.Remove(path)
+			if err != nil {
+				log.Fatal().Err(err).Msg("unable to truncate data")
+			}
+		}
+		return err
+	})
 }
