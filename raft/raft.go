@@ -2,7 +2,7 @@ package raft
 
 import (
 	"context"
-	"log"
+
 	"math/rand"
 	"sync"
 	"time"
@@ -21,15 +21,16 @@ const (
 )
 
 type Raft struct {
-	mu            sync.Mutex
-	state         State
-	lastEventTime time.Time
-	votedFor      string
-	term          int64
-	server        *Server
-	log           *RaftLog
-	commitIndex   int
-	lastApplied   int
+	mu    sync.Mutex
+	state State
+	// lastEventTime    time.Time
+	electionDeadline time.Time
+	votedFor         string
+	term             int64
+	server           *Server
+	log              *RaftLog
+	commitIndex      int
+	lastApplied      int
 
 	// Leader Only
 	nextIndex  map[string]int
@@ -43,15 +44,16 @@ type Raft struct {
 
 func NewRaft(server *Server, applyChan chan ApplyMessage, groupID, raftStorageDir string) *Raft {
 	r := &Raft{
-		state:         Follower,
-		lastEventTime: time.Now(),
-		votedFor:      "-1",
-		term:          0,
-		nextIndex:     make(map[string]int),
-		matchIndex:    make(map[string]int),
-		applyChan:     applyChan,
-		server:        server,
-		groupID:       groupID,
+		state: Follower,
+		// lastEventTime:    time.Now(),
+		electionDeadline: time.Now().Add(generateTimeout()),
+		votedFor:         "-1",
+		term:             0,
+		nextIndex:        make(map[string]int),
+		matchIndex:       make(map[string]int),
+		applyChan:        applyChan,
+		server:           server,
+		groupID:          groupID,
 	}
 
 	raftLog, err := openRaftLog(raftStorageDir)
@@ -61,6 +63,13 @@ func NewRaft(server *Server, applyChan chan ApplyMessage, groupID, raftStorageDi
 
 	r.log = raftLog
 
+	if err := r.loadPersistentState(raftStorageDir); err != nil {
+		zeroLog.Fatal().Err(err).Msg("unable to load raft state")
+	}
+
+	/* Give an existing leader enough time to send a heartbeat
+	before this restarted node attempts an election. */
+	r.electionDeadline = time.Now().Add(500 * time.Millisecond)
 	return r
 }
 
@@ -70,35 +79,47 @@ func generateTimeout() time.Duration {
 	return time.Duration(raftRandomTime * int(time.Millisecond))
 }
 
+// Whenever something meaningful happen we will move election deadline forward.
 func (r *Raft) StartElectionLoop() {
-	ticker := time.NewTicker(time.Millisecond * 10)
+	ticker := time.NewTicker(10 * time.Millisecond)
 	defer ticker.Stop()
 
-	timeout := generateTimeout()
-	zeroLog.Info().Int64("timeout", timeout.Milliseconds()).Msg("Starting Election Loop")
+	r.mu.Lock()
+	deadline := r.electionDeadline
+	r.mu.Unlock()
 
-	for {
-		<-ticker.C
+	zeroLog.Info().
+		Dur("timeout", time.Until(deadline)).
+		Msg("Starting Election Loop")
 
+	for range ticker.C {
 		r.mu.Lock()
-		state := r.state
-		elapsed := time.Since(r.lastEventTime)
-		r.mu.Unlock()
 
-		if state == Dead {
+		if r.state == Dead {
+			r.mu.Unlock()
 			continue
 		}
 
-		if state != Candidate && state != Follower {
-			continue
-		}
+		if (r.state == Follower || r.state == Candidate) &&
+			time.Now().After(r.electionDeadline) {
 
-		if elapsed >= timeout {
-			log.Println("Starting Election")
+			r.mu.Unlock()
+
+			zeroLog.Info().Msg("Starting Election")
 			r.startElection()
-			timeout = generateTimeout()
+
+			continue
 		}
+
+		r.mu.Unlock()
 	}
+}
+
+func (r *Raft) resetElectionDeadline() {
+	now := time.Now()
+
+	// r.lastEventTime = now
+	r.electionDeadline = now.Add(generateTimeout())
 }
 
 func (r *Raft) startElection() {
@@ -107,15 +128,20 @@ func (r *Raft) startElection() {
 	r.term++
 	r.votedFor = r.server.id
 	savedTerm := r.term
+
+	if err := r.persistStateLocked(); err != nil {
+		zeroLog.Err(err).Msg("failed to persist election state")
+	}
+
+	r.resetElectionDeadline()
 	totalVotesReceived := 1
-	r.lastEventTime = time.Now()
 	lastLogIndex := r.log.LastIndex()
 	lastLogTerm := r.log.LastTerm()
 	r.mu.Unlock()
 
 	for peerID, peerRPC := range r.server.peerRPCs {
 		go func(peerID string, peerRPC pb.RaftServiceClient) {
-			log.Println("Requesting vote from: " + peerID)
+			zeroLog.Info().Msg("Requesting vote from: " + peerID)
 
 			req := &pb.RequestVoteReq{
 				Term:         savedTerm,
@@ -127,11 +153,11 @@ func (r *Raft) startElection() {
 
 			resp, err := peerRPC.RequestVote(context.Background(), req)
 			if err != nil {
-				log.Printf("vote RPC to %s failed: %v", peerID, err)
+				zeroLog.Info().Msgf("vote RPC to %s failed: %v", peerID, err)
 				return
 			}
 
-			log.Printf(
+			zeroLog.Info().Msgf(
 				"reply from %s granted=%v term=%d",
 				peerID,
 				resp.VoteGranted,
@@ -141,11 +167,11 @@ func (r *Raft) startElection() {
 			r.mu.Lock()
 			defer r.mu.Unlock()
 
-			if r.state != Candidate {
+			if r.state != Candidate || r.term != savedTerm {
 				if r.state == Leader {
-					log.Println("election already won")
+					zeroLog.Info().Msg("election already won")
 				} else {
-					log.Println("someone else became leader")
+					zeroLog.Info().Msg("someone else became leader")
 				}
 				return
 			}
@@ -157,13 +183,13 @@ func (r *Raft) startElection() {
 
 			if resp.Term == savedTerm {
 				if resp.VoteGranted {
-					log.Println("Vote granted by: " + peerID)
+					zeroLog.Info().Msg("Vote granted by: " + peerID)
 
 					totalVotesReceived++
 					clusterSize := len(r.server.peerRPCs) + 1
 
 					if totalVotesReceived > clusterSize/2 && r.state == Candidate {
-						log.Println("Won Election")
+						zeroLog.Info().Msg("Won Election")
 						r.becameLeader()
 					}
 				}
@@ -195,9 +221,15 @@ func (r *Raft) HandleRequestVote(req *pb.RequestVoteReq) (*pb.RequestVoteResp, e
 	isCandidateUpToDate := req.LastLogTerm > lastLogTerm || (req.LastLogTerm == lastLogTerm && req.LastLogIndex >= lastLogIndex)
 
 	if r.term == req.Term && (r.votedFor == "-1" || r.votedFor == req.CandidateID) && isCandidateUpToDate {
-		resp.VoteGranted = true
 		r.votedFor = req.CandidateID
-		r.lastEventTime = time.Now()
+
+		if err := r.persistStateLocked(); err != nil {
+			zeroLog.Err(err).Msg("failed to persist vote")
+			resp.VoteGranted = false
+		} else {
+			resp.VoteGranted = true
+			r.resetElectionDeadline()
+		}
 	} else {
 		resp.VoteGranted = false
 	}
@@ -219,15 +251,14 @@ func (r *Raft) HandleAppendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntr
 		return resp, nil
 	}
 
-	r.lastEventTime = time.Now()
-
 	if req.Term > r.term {
 		r.becameFollower(req.Term)
+	} else if r.state != Follower {
+		// Same term: step down without resetting votedFor.
+		r.state = Follower
 	}
 
-	if r.state != Follower {
-		r.becameFollower(req.Term)
-	}
+	r.resetElectionDeadline()
 
 	lastLogIndex := r.log.LastIndex()
 
@@ -300,10 +331,17 @@ func (r *Raft) HandleAppendEntries(req *pb.AppendEntriesRequest) (*pb.AppendEntr
 }
 
 func (r *Raft) becameFollower(term int64) {
-	r.term = term
+	if term > r.term {
+		r.term = term
+		r.votedFor = "-1"
+
+		if err := r.persistStateLocked(); err != nil {
+			zeroLog.Err(err).Msg("failed to persist follower state")
+		}
+	}
+
 	r.state = Follower
-	r.votedFor = "-1"
-	r.lastEventTime = time.Now()
+	r.resetElectionDeadline()
 }
 
 func (r *Raft) becameLeader() {
@@ -453,7 +491,7 @@ func (r *Raft) advanceLeaderCommit() {
 
 		entry, err := r.log.Get(N)
 		if err != nil {
-			log.Printf("failed to read log entry %d: %v", N, err)
+			zeroLog.Info().Msgf("failed to read log entry %d: %v", N, err)
 			continue
 		}
 
@@ -508,7 +546,7 @@ func (r *Raft) Submit(command []byte) bool {
 
 	_, err := r.log.Append(entry)
 	if err != nil {
-		log.Printf("failed to append raft entry: %v", err)
+		zeroLog.Info().Msgf("failed to append raft entry: %v", err)
 		return false
 	}
 
