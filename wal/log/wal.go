@@ -2,7 +2,6 @@ package log
 
 import (
 	"context"
-	"log"
 	"os"
 	"slices"
 	"strconv"
@@ -10,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	zerolog "github.com/rs/zerolog/log"
 	"github.com/x-sushant-x/miniKafka/models"
 )
 
@@ -180,9 +180,8 @@ func (w *wal) flushRegular(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			log.Printf("Flushing Data: %s\n", w.dir)
 			if err := w.flush(); err != nil {
-				log.Printf("wal flush failed: %v", err)
+				zerolog.Err(err).Msg("wal flush failed")
 			}
 		case <-ctx.Done():
 			return
@@ -209,4 +208,11 @@ func (w *wal) deleteExpiredSegments() error {
 
 	w.segments = remaining
 	return nil
+}
+
+func (w *wal) NextOffset() uint64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	return w.active.nextOff
 }

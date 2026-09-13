@@ -12,30 +12,33 @@ import (
 
 	"github.com/x-sushant-x/miniKafka/config"
 	"github.com/x-sushant-x/miniKafka/models"
+	"github.com/x-sushant-x/miniKafka/raft"
 	"github.com/x-sushant-x/miniKafka/wal/log"
 
 	zerolog "github.com/rs/zerolog/log"
 )
 
 type Broker struct {
-	id     string
-	host   string
-	port   string
-	topics sync.Map
-	ctx    context.Context
-	server *TCPServer
+	id         string
+	host       string
+	port       string
+	topics     sync.Map
+	ctx        context.Context
+	server     *TCPServer
+	raftServer *raft.Server
 }
 
-func New(ctx context.Context, port string) (*Broker, error) {
+func New(ctx context.Context, port string, raftServer *raft.Server) (*Broker, error) {
 	topicsStoragePath := config.Config.TopicsStorageDir
 	if topicsStoragePath == "" {
 		return nil, ErrEmptyTopicsStorageDir
 	}
 
 	broker := Broker{
-		port:   port,
-		topics: sync.Map{},
-		ctx:    ctx,
+		port:       port,
+		topics:     sync.Map{},
+		ctx:        ctx,
+		raftServer: raftServer,
 	}
 
 	entries, err := os.ReadDir(topicsStoragePath)
@@ -62,10 +65,13 @@ func New(ctx context.Context, port string) (*Broker, error) {
 			return nil, err
 		}
 
-		existingTopic, err := log.NewTopic(ctx, topicName, len(partitions))
+		existingTopic, err := log.NewTopic(ctx, topicName, len(partitions), raftServer)
 		if err != nil {
+			zerolog.Err(err).Str("name", existingTopic.Name).Msgf("Unable to load existing topic")
 			return nil, err
 		}
+
+		zerolog.Info().Str("name", existingTopic.Name).Msgf("Loaded existing topic")
 
 		broker.topics.Store(topicName, existingTopic)
 		zerolog.Info().Str("name", topicName).Int("partitions", len(partitions)).Msg("Loaded topic")
@@ -91,7 +97,7 @@ func (b *Broker) Produce(topicName string, record *models.Record) (*models.Recor
 		return topic.(*log.Topic).Append(record)
 	}
 
-	topic, err := log.NewTopic(b.ctx, topicName, 1)
+	topic, err := log.NewTopic(b.ctx, topicName, 1, b.raftServer)
 	if err != nil {
 		return nil, log.ErrUnableToCreateTopic
 	}
@@ -109,7 +115,7 @@ func (b *Broker) Consume(topicName string, offset uint64, partition int) (*model
 		return topic.(*log.Topic).Read(offset, partition)
 	}
 
-	topic, err := log.NewTopic(b.ctx, topicName, 1)
+	topic, err := log.NewTopic(b.ctx, topicName, 1, b.raftServer)
 	if err != nil {
 		return nil, log.ErrUnableToCreateTopic
 	}
@@ -143,7 +149,7 @@ func (b *Broker) CreateTopic(topicName string, totalPartitions int) error {
 		return log.ErrTopicAlreadyExists
 	}
 
-	topic, err := log.NewTopic(b.ctx, topicName, totalPartitions)
+	topic, err := log.NewTopic(b.ctx, topicName, totalPartitions, b.raftServer)
 	if err != nil {
 		return log.ErrUnableToCreateTopic
 	}

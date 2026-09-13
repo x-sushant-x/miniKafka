@@ -25,7 +25,7 @@ func TestNew_EmptyTopicsStorageDir(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, err := New(ctx, "0")
+	_, err := New(ctx, "0", nil)
 
 	require.Error(t, err)
 	require.ErrorIs(t, err, ErrEmptyTopicsStorageDir)
@@ -43,7 +43,7 @@ func TestNew_LoadExistingTopics(t *testing.T) {
 	err = os.MkdirAll(filepath.Join(config.Config.TopicsStorageDir, "users"), 0755)
 	require.NoError(t, err)
 
-	broker, err := New(ctx, "0")
+	broker, err := New(ctx, "0", nil)
 	require.NoError(t, err)
 
 	createdTopic, ok := broker.topics.Load("orders")
@@ -62,7 +62,7 @@ func TestProduce_CreatesTopic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, err := New(ctx, "0")
+	broker, err := New(ctx, "0", nil)
 	require.NoError(t, err)
 
 	record := &models.Record{
@@ -84,7 +84,7 @@ func TestProduce_ExistingTopic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	r1, err := broker.Produce("orders", &models.Record{
 		Value: []byte("A"),
@@ -108,7 +108,7 @@ func TestConsume(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	_, err := broker.Produce("orders", &models.Record{
 		Value: []byte("hello"),
@@ -128,7 +128,7 @@ func TestConsume_OffsetNotFound(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	_, err := broker.Produce("orders", &models.Record{
 		Value: []byte("hello"),
@@ -148,7 +148,7 @@ func TestHandleRequest_Produce(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	req := models.Request{
 		Type:  "produce",
@@ -175,7 +175,7 @@ func TestHandleRequest_InvalidJSON(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	respBytes, err := broker.handleRequest([]byte("{"))
 
@@ -194,7 +194,7 @@ func TestHandleRequest_UnknownRequest(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	req := models.Request{
 		Type: "invalid",
@@ -217,7 +217,7 @@ func TestProduce_ConcurrentTopicCreation(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	broker, _ := New(ctx, "0")
+	broker, _ := New(ctx, "0", nil)
 
 	var wg sync.WaitGroup
 

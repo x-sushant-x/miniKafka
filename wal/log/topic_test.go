@@ -24,7 +24,7 @@ func TestNewTopic(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	topic, err := NewTopic(ctx, "orders", 1)
+	topic, err := NewTopic(ctx, "orders", 1, nil)
 
 	require.NoError(t, err)
 	require.NotNil(t, topic)
@@ -36,7 +36,7 @@ func TestNewTopic_EmptyName(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "", 1)
+	topic, err := NewTopic(ctx, "", 1, nil)
 
 	require.ErrorIs(t, err, ErrEmptyTopicName)
 	require.Nil(t, topic)
@@ -47,7 +47,7 @@ func TestTopic_AppendAndRead(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "append-read", 1)
+	topic, err := NewTopic(ctx, "append-read", 1, nil)
 	require.NoError(t, err)
 
 	record := &models.Record{
@@ -70,7 +70,7 @@ func TestTopic_MultipleRecords(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "multiple-records", 1)
+	topic, err := NewTopic(ctx, "multiple-records", 1, nil)
 	require.NoError(t, err)
 
 	expected := []*models.Record{
@@ -112,7 +112,7 @@ func TestTopic_AssignsOffsets(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "offset-test", 1)
+	topic, err := NewTopic(ctx, "offset-test", 1, nil)
 	require.NoError(t, err)
 
 	r1, err := topic.Append(&models.Record{
@@ -143,7 +143,7 @@ func TestTopic_ReadInvalidOffset(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	topic, err := NewTopic(ctx, "invalid-offset", 1)
+	topic, err := NewTopic(ctx, "invalid-offset", 1, nil)
 	require.NoError(t, err)
 
 	record, err := topic.Read(100, 0)
